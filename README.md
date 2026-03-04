@@ -1,4 +1,4 @@
-Thank you guys for 2 years, it's been a pleasure <3
+ii stupid never dies
 
 
 <p align="center">
