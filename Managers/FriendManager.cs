@@ -81,15 +81,34 @@ namespace iiMenu.Managers
         private string FriendResponse;
         public const byte FriendByte = 53;
         private const float RigDespawnTime = 0.5f;
+        public static bool RemoteFriendServerEnabled = false;
+        private const string RemoteFriendServerDisabledReason = "Friend remote server has been removed.";
 
         public FriendData Friends = new FriendData { friends = new Dictionary<string, FriendData.Friend>(), incoming = new Dictionary<string, FriendData.PendingFriend>(), outgoing = new Dictionary<string, FriendData.PendingFriend>() };
+
+        private static FriendData CreateEmptyFriendData() => new FriendData
+        {
+            friends = new Dictionary<string, FriendData.Friend>(),
+            incoming = new Dictionary<string, FriendData.PendingFriend>(),
+            outgoing = new Dictionary<string, FriendData.PendingFriend>()
+        };
+
+        private static bool EnsureFriendRemoteServer()
+        {
+            if (RemoteFriendServerEnabled)
+                return true;
+
+            NotificationManager.SendNotification($"<color=grey>[</color><color=red>ERROR</color><color=grey>]</color> {RemoteFriendServerDisabledReason}", 5000);
+            return false;
+        }
 
         public void Awake()
         {
             instance = this;
             UpdateTime = Time.time + 5f;
 
-            gameObject.AddComponent<FriendWebSocket>();
+            if (RemoteFriendServerEnabled)
+                gameObject.AddComponent<FriendWebSocket>();
 
             NetworkSystem.Instance.OnJoinedRoomEvent += CheckAllPlayersFriends;
             NetworkSystem.Instance.OnPlayerJoined += CheckPlayerFriends;
@@ -679,6 +698,13 @@ namespace iiMenu.Managers
 
         public IEnumerator UpdateFriendsList()
         {
+            if (!RemoteFriendServerEnabled)
+            {
+                Friends = CreateEmptyFriendData();
+                FriendsListUpdated();
+                yield break;
+            }
+
             using UnityWebRequest request = new UnityWebRequest($"{PluginInfo.ServerAPI}/getfriends", "GET");
             byte[] bodyRaw = Encoding.UTF8.GetBytes("{}");
             request.uploadHandler = new UploadHandlerRaw(bodyRaw);
@@ -709,12 +735,7 @@ namespace iiMenu.Managers
                 }
             }
 
-            Friends = parsed ?? new FriendData
-            {
-                friends = new Dictionary<string, FriendData.Friend>(),
-                incoming = new Dictionary<string, FriendData.PendingFriend>(),
-                outgoing = new Dictionary<string, FriendData.PendingFriend>()
-            };
+            Friends = parsed ?? CreateEmptyFriendData();
             FriendsListUpdated();
         }
 
@@ -765,9 +786,18 @@ namespace iiMenu.Managers
 
         public static void InviteFriend(string uid)
         {
+            if (!EnsureFriendRemoteServer())
+                return;
+
             if (!NetworkSystem.Instance.InRoom)
             {
                 NotificationManager.SendNotification("<color=grey>[</color><color=red>ERROR</color><color=grey>]</color> You are not in a room.", 5000);
+                return;
+            }
+
+            if (FriendWebSocket.Instance == null)
+            {
+                NotificationManager.SendNotification("<color=grey>[</color><color=red>ERROR</color><color=grey>]</color> Friends websocket is unavailable.", 5000);
                 return;
             }
 
@@ -783,6 +813,15 @@ namespace iiMenu.Managers
 
         public static void RequestInviteFriend(string uid)
         {
+            if (!EnsureFriendRemoteServer())
+                return;
+
+            if (FriendWebSocket.Instance == null)
+            {
+                NotificationManager.SendNotification("<color=grey>[</color><color=red>ERROR</color><color=grey>]</color> Friends websocket is unavailable.", 5000);
+                return;
+            }
+
             _ = FriendWebSocket.Instance.Send(JsonConvert.SerializeObject(new
             {
                 command = "reqinvite",
@@ -794,6 +833,15 @@ namespace iiMenu.Managers
 
         public static void SharePreferences(string uid)
         {
+            if (!EnsureFriendRemoteServer())
+                return;
+
+            if (FriendWebSocket.Instance == null)
+            {
+                NotificationManager.SendNotification("<color=grey>[</color><color=red>ERROR</color><color=grey>]</color> Friends websocket is unavailable.", 5000);
+                return;
+            }
+
             _ = FriendWebSocket.Instance.Send(JsonConvert.SerializeObject(new
             {
                 command = "preferences",
@@ -806,6 +854,15 @@ namespace iiMenu.Managers
 
         public static void ShareTheme(string uid)
         {
+            if (!EnsureFriendRemoteServer())
+                return;
+
+            if (FriendWebSocket.Instance == null)
+            {
+                NotificationManager.SendNotification("<color=grey>[</color><color=red>ERROR</color><color=grey>]</color> Friends websocket is unavailable.", 5000);
+                return;
+            }
+
             _ = FriendWebSocket.Instance.Send(JsonConvert.SerializeObject(new
             {
                 command = "theme",
@@ -818,6 +875,9 @@ namespace iiMenu.Managers
 
         public static void ShareMacro(string uid, string name)
         {
+            if (!EnsureFriendRemoteServer())
+                return;
+
             Movement.Macro? sendingMacro = null;
             foreach (var macroItem in Movement.macros.Select(macroData => macroData.Value).Where(macroItem => String.Equals(macroItem.name.ToLower(), name.ToLower())))
                 sendingMacro = macroItem;
@@ -825,6 +885,12 @@ namespace iiMenu.Managers
             if (sendingMacro == null)
             {
                 NotificationManager.SendNotification("<color=grey>[</color><color=red>ERROR</color><color=grey>]</color> Macro \"" + name + "\" does not exist.", 5000);
+                return;
+            }
+
+            if (FriendWebSocket.Instance == null)
+            {
+                NotificationManager.SendNotification("<color=grey>[</color><color=red>ERROR</color><color=grey>]</color> Friends websocket is unavailable.", 5000);
                 return;
             }
                 
@@ -840,6 +906,15 @@ namespace iiMenu.Managers
 
         public static void SendFriendMessage(string uid, string message)
         {
+            if (!EnsureFriendRemoteServer())
+                return;
+
+            if (FriendWebSocket.Instance == null)
+            {
+                NotificationManager.SendNotification("<color=grey>[</color><color=red>ERROR</color><color=grey>]</color> Friends websocket is unavailable.", 5000);
+                return;
+            }
+
             _ = FriendWebSocket.Instance.Send(JsonConvert.SerializeObject(new
             {
                 command = "message",
@@ -873,6 +948,12 @@ namespace iiMenu.Managers
 
         public static IEnumerator ExecuteAction(string uid, string action, Action success, Action<string> failure)
         {
+            if (!RemoteFriendServerEnabled)
+            {
+                failure?.Invoke(RemoteFriendServerDisabledReason);
+                yield break;
+            }
+
             UnityWebRequest request = new UnityWebRequest($"{PluginInfo.ServerAPI}/{action}", "POST");
 
             string json = JsonConvert.SerializeObject(new { uid });
@@ -1360,6 +1441,9 @@ namespace iiMenu.Managers
 
             public void Update()
             {
+                if (!FriendManager.RemoteFriendServerEnabled)
+                    return;
+
                 if (connected) return;
                 reconnectTime += Time.unscaledDeltaTime;
                 if (!(reconnectTime >= 15f)) return;
@@ -1369,6 +1453,9 @@ namespace iiMenu.Managers
 
             public async Task Connect()
             {
+                if (!FriendManager.RemoteFriendServerEnabled)
+                    return;
+
                 if (ws != null && (ws.State == WebSocketState.Open || ws.State == WebSocketState.Connecting))
                     return;
 
@@ -1430,6 +1517,9 @@ namespace iiMenu.Managers
 
             public async Task Send(string message)
             {
+                if (!FriendManager.RemoteFriendServerEnabled)
+                    return;
+
                 if (ws != null && ws.State == WebSocketState.Open)
                 {
                     byte[] bytes = Encoding.UTF8.GetBytes(message);
