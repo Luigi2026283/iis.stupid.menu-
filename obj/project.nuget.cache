@@ -1,10 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "KRhTh1Vpu7c=",
+  "dgSpecHash": "ujYb0mg4nmg=",
   "success": true,
-  "projectFilePath": "C:\\Users\\wfe\\source\\repos\\iis.stupid.menu-\\iiMenu.csproj",
-  "expectedPackageFiles": [
-    "C:\\Users\\wfe\\.nuget\\packages\\bepinex.assemblypublicizer.msbuild\\0.4.3\\bepinex.assemblypublicizer.msbuild.0.4.3.nupkg.sha512"
-  ],
+  "projectFilePath": "C:\\Users\\wfe\\source\\repos\\iis.stupid.menu\\iiMenu.csproj",
+  "expectedPackageFiles": [],
   "logs": []
 }
