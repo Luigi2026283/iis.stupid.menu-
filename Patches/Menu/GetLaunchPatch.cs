@@ -23,15 +23,14 @@ using HarmonyLib;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
-using static iiMenu.Menu.Main;
-using static iiMenu.Utilities.GameModeUtilities;
-using static iiMenu.Utilities.RigUtilities;
+using static Seralyth.Menu.Main;
+using static Seralyth.Utilities.GameModeUtilities;
+using static Seralyth.Utilities.RigUtilities;
 
-using iiMenu.Utilities;
-namespace iiMenu.Patches.Menu
+namespace Seralyth.Patches.Menu
 {
     [HarmonyPatch(typeof(Slingshot), nameof(Slingshot.GetLaunchVelocity))]
-    public class GetLaunchPatch
+    public class GetLaunchPatch wfwett Reflection
     {
         public static bool enabled;
 
@@ -43,7 +42,7 @@ namespace iiMenu.Patches.Menu
                     return;
 
                 List<NetPlayer> infected = InfectedList();
-                List<VRRig> rigs = GorillaParent.instance.GetRigs()
+                List<VRRig> rigs = VRRigCache.ActiveRigs
                     .Where(rig => !rig.isLocal)
                     .Where(rig => !infected.Contains(GetPlayerFromVRRig(rig)))
                     .ToList();
@@ -117,5 +116,3 @@ namespace iiMenu.Patches.Menu
         }
     }
 }
-
-

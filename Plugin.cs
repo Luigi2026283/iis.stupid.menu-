@@ -26,6 +26,7 @@ using iiMenu.Managers;
 using iiMenu.Menu;
 using iiMenu.Patches;
 using iiMenu.Patches.Menu;
+using System;
 using System.ComponentModel;
 using System.IO;
 using System.Linq;
@@ -44,15 +45,20 @@ namespace iiMenu
 
         private void Awake()
         {
-            // Set console title
-            Console.Title = $"ii's Stupid Menu // Build {PluginInfo.Version}";
             instance = this;
+            LogManager.Initialize();
+            LogManager.Log("Plugin Awake started.");
 
-            string logoLines = PluginInfo.Logo.Split(@"
+            try
+            {
+                // Set console title
+                Console.Title = $"ii's Stupid Menu // Build {PluginInfo.Version}";
+
+                string logoLines = PluginInfo.Logo.Split(@"
 ")
-                .Aggregate("", (current, line) => current + (System.Environment.NewLine + "     " + line));
+                    .Aggregate("", (current, line) => current + (System.Environment.NewLine + "     " + line));
 
-            LogManager.Log($@"
+                LogManager.Log($@"
 {logoLines}
     ii's Stupid Menu  {(PluginInfo.BetaBuild ? "Beta " : "Build")} {PluginInfo.Version}
     Compiled {PluginInfo.BuildTimestamp}
@@ -64,9 +70,10 @@ namespace iiMenu
     see `https://github.com/iiDk-the-actual/iis.Stupid.Menu/GPL/REDISTRIBUTION` for details.
 ");
 
-            FirstLaunch = !Directory.Exists(PluginInfo.BaseDirectory);
+                FirstLaunch = !Directory.Exists(PluginInfo.BaseDirectory);
+                LogManager.Log($"First launch: {FirstLaunch}");
 
-            string[] ExistingDirectories = {
+                string[] ExistingDirectories = {
                 "",
                 "/Sounds",
                 "/Plugins",
@@ -80,43 +87,72 @@ namespace iiMenu
                 "/Achievements"
             };
 
-            foreach (string DirectoryString in ExistingDirectories)
-            {
-                string DirectoryTarget = $"{PluginInfo.BaseDirectory}{DirectoryString}";
-                if (!Directory.Exists(DirectoryTarget))
-                    Directory.CreateDirectory(DirectoryTarget);
+                foreach (string DirectoryString in ExistingDirectories)
+                {
+                    string DirectoryTarget = $"{PluginInfo.BaseDirectory}{DirectoryString}";
+                    if (!Directory.Exists(DirectoryTarget))
+                        Directory.CreateDirectory(DirectoryTarget);
+                }
+
+                PatchHandler.PatchAll(true);
+
+                // Ugily hard-coded but works so well
+                if (File.Exists($"{PluginInfo.BaseDirectory}/iiMenu_Preferences.txt"))
+                {
+                    if (File.ReadAllLines($"{PluginInfo.BaseDirectory}/iiMenu_Preferences.txt")[0].Split(";;").Contains("Accept TOS"))
+                        TOSPatches.enabled = true;
+                }
+
+                if (File.Exists($"{PluginInfo.BaseDirectory}/iiMenu_DisableTelemetry.txt"))
+                    ServerData.DisableTelemetry = true;
+
+                GorillaTagger.OnPlayerSpawned(LoadMenu);
+                LogManager.Log("Registered GorillaTagger.OnPlayerSpawned callback.");
             }
-
-            PatchHandler.PatchAll(true);
-
-            // Ugily hard-coded but works so well
-            if (File.Exists($"{PluginInfo.BaseDirectory}/iiMenu_Preferences.txt"))
+            catch (Exception exception)
             {
-                if (File.ReadAllLines($"{PluginInfo.BaseDirectory}/iiMenu_Preferences.txt")[0].Split(";;").Contains("Accept TOS"))
-                    TOSPatches.enabled = true;
+                LogManager.LogError($"Unhandled exception in Plugin.Awake: {exception}");
             }
-
-            if (File.Exists($"{PluginInfo.BaseDirectory}/iiMenu_DisableTelemetry.txt"))
-                ServerData.DisableTelemetry = true;
-            
-            GorillaTagger.OnPlayerSpawned(LoadMenu);
         }
 
-        private void OnDestroy() =>
-            Main.UnloadMenu();
+        private void OnDestroy()
+        {
+            try
+            {
+                LogManager.Log("Plugin OnDestroy called. Unloading menu.");
+                Main.UnloadMenu();
+            }
+            catch (Exception exception)
+            {
+                LogManager.LogError($"Unhandled exception in Plugin.OnDestroy: {exception}");
+            }
+            finally
+            {
+                LogManager.Shutdown();
+            }
+        }
 
         private static void LoadMenu()
         {
-            PatchHandler.PatchAll();
+            LogManager.Log("LoadMenu invoked.");
+            try
+            {
+                PatchHandler.PatchAll();
 
-            GameObject Loader = new GameObject("iiMenu_Loader");
-            Loader.AddComponent<CoroutineManager>();
-            Loader.AddComponent<NotificationManager>();
-            Loader.AddComponent<CustomBoardManager>();
+                GameObject Loader = new GameObject("iiMenu_Loader");
+                Loader.AddComponent<CoroutineManager>();
+                Loader.AddComponent<NotificationManager>();
+                Loader.AddComponent<CustomBoardManager>();
 
-            Loader.AddComponent<UI>();
+                Loader.AddComponent<UI>();
 
-            DontDestroyOnLoad(Loader);
+                DontDestroyOnLoad(Loader);
+                LogManager.Log("LoadMenu finished successfully.");
+            }
+            catch (Exception exception)
+            {
+                LogManager.LogError($"Unhandled exception in LoadMenu: {exception}");
+            }
         }
 
         // For SharpMonoInjector usage

@@ -225,11 +225,15 @@ namespace iiMenu.Mods
             if (delta == Vector3.zero)
                 return;
 
+            if (GTPlayer.Instance != null)
+            {
+                GTPlayer.Instance.transform.position += delta;
+                return;
+            }
+
             Rigidbody body = GorillaTagger.Instance?.rigidbody;
             if (body != null)
-                body.position += delta;
-            else if (GTPlayer.Instance != null)
-                GTPlayer.Instance.transform.position += delta;
+                body.transform.position += delta;
         }
 
         public static GameObject leftplat;
@@ -593,7 +597,8 @@ namespace iiMenu.Mods
         public static Vector3 lastPosition = Vector3.zero;
         public static void WASDFly()
         {
-            bool stationary = !Buttons.GetIndex("Disable Stationary WASD Fly").enabled;
+            if (GorillaTagger.Instance?.headCollider == null)
+                return;
 
             bool W = UnityInput.Current.GetKey(KeyCode.W);
             bool A = UnityInput.Current.GetKey(KeyCode.A);
@@ -604,87 +609,48 @@ namespace iiMenu.Mods
             bool Shift = UnityInput.Current.GetKey(KeyCode.LeftShift);
             bool Alt = UnityInput.Current.GetKey(KeyCode.LeftAlt);
 
-            bool LeftArrow = UnityInput.Current.GetKey(KeyCode.LeftArrow);
-            bool RightArrow = UnityInput.Current.GetKey(KeyCode.RightArrow);
-            bool UpArrow = UnityInput.Current.GetKey(KeyCode.UpArrow);
-            bool DownArrow = UnityInput.Current.GetKey(KeyCode.DownArrow);
-
-            if (stationary || W || A || S || D || Space || Ctrl)
-                GorillaTagger.Instance.rigidbody.linearVelocity = Vector3.zero;
-
-            if (!menu)
+            bool stationary = true;
+            try
             {
-                Transform parentTransform = GTPlayer.Instance.GetControllerTransform(false).parent;
-
-                float turnSpeed = 250f;
-                
-                if (LeftArrow)
-                    parentTransform.eulerAngles += new Vector3(0, -turnSpeed, 0) * Time.deltaTime;
-                if (RightArrow)
-                    parentTransform.eulerAngles += new Vector3(0, turnSpeed, 0) * Time.deltaTime;
-                if (UpArrow)
-                    parentTransform.eulerAngles += new Vector3(-turnSpeed, 0, 0) * Time.deltaTime;
-                if (DownArrow)
-                    parentTransform.eulerAngles += new Vector3(turnSpeed, 0, 0) * Time.deltaTime;
-                
-                if (Mouse.current.rightButton.isPressed)
-                {
-                    Quaternion currentRotation = parentTransform.rotation;
-                    Vector3 euler = currentRotation.eulerAngles;
-
-                    if (startX < 0)
-                    {
-                        startX = euler.y;
-                        subThingy = Mouse.current.position.value.x / Screen.width;
-                    }
-                    if (startY < 0)
-                    {
-                        startY = euler.x;
-                        subThingyZ = Mouse.current.position.value.y / Screen.height;
-                    }
-
-                    float newX = startY - (Mouse.current.position.value.y / Screen.height - subThingyZ) * 360 * 1.33f;
-                    float newY = startX + (Mouse.current.position.value.x / Screen.width - subThingy) * 360 * 1.33f;
-
-                    newX = newX > 180f ? newX - 360f : newX;
-                    newX = Mathf.Clamp(newX, -90f, 90f);
-
-                    parentTransform.rotation = Quaternion.Euler(newX, newY, euler.z);
-                }
-                else
-                {
-                    startX = -1;
-                    startY = -1;
-                }
-
-                float speed = FlySpeed;
-                if (Shift)
-                    speed *= 2f;
-                else if (Alt)
-                    speed /= 2;
-
-                if (W)
-                    GorillaTagger.Instance.rigidbody.transform.position += GTPlayer.Instance.GetControllerTransform(false).parent.forward * (Time.deltaTime * speed);
-
-                if (S)
-                    GorillaTagger.Instance.rigidbody.transform.position += GTPlayer.Instance.GetControllerTransform(false).parent.forward * (Time.deltaTime * -speed);
-
-                if (A)
-                    GorillaTagger.Instance.rigidbody.transform.position += GTPlayer.Instance.GetControllerTransform(false).parent.right * (Time.deltaTime * -speed);
-
-                if (D)
-                    GorillaTagger.Instance.rigidbody.transform.position += GTPlayer.Instance.GetControllerTransform(false).parent.right * (Time.deltaTime * speed);
-
-                if (Space)
-                    GorillaTagger.Instance.rigidbody.transform.position += new Vector3(0f, Time.deltaTime * speed, 0f);
-
-                if (Ctrl)
-                    GorillaTagger.Instance.rigidbody.transform.position += new Vector3(0f, Time.deltaTime * -speed, 0f);
-
-                VRRig.LocalRig.head.rigTarget.transform.rotation = GorillaTagger.Instance.headCollider.transform.rotation;
+                stationary = !Buttons.GetIndex("Disable Stationary WASD Fly").enabled;
+            }
+            catch
+            {
             }
 
-            if (!W && !A && !S && !D && !Space && !Ctrl && lastPosition != Vector3.zero && stationary)
+            bool anyMove = W || A || S || D || Space || Ctrl;
+            if (stationary || anyMove)
+                GorillaTagger.Instance.rigidbody.linearVelocity = Vector3.zero;
+
+            float speed = FlySpeed;
+            if (Shift)
+                speed *= 2f;
+            else if (Alt)
+                speed /= 2f;
+
+            Vector3 forward = GorillaTagger.Instance.headCollider.transform.forward;
+            Vector3 right = GorillaTagger.Instance.headCollider.transform.right;
+
+            forward.y = 0f;
+            right.y = 0f;
+
+            if (forward.sqrMagnitude > 0f)
+                forward.Normalize();
+            if (right.sqrMagnitude > 0f)
+                right.Normalize();
+
+            Vector3 move = Vector3.zero;
+            if (W) move += forward;
+            if (S) move -= forward;
+            if (A) move -= right;
+            if (D) move += right;
+            if (Space) move += Vector3.up;
+            if (Ctrl) move -= Vector3.up;
+
+            if (move != Vector3.zero)
+                TranslateLocalPlayer(move * (Time.deltaTime * speed));
+
+            if (!anyMove && lastPosition != Vector3.zero && stationary)
                 GorillaTagger.Instance.rigidbody.transform.position = lastPosition;
             else
                 lastPosition = GorillaTagger.Instance.rigidbody.transform.position;

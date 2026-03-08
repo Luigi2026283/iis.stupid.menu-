@@ -94,7 +94,7 @@ namespace iiMenu.Patches.Menu
         [HarmonyPatch(typeof(PlayFabUnityHttp), nameof(PlayFabUnityHttp.MakeApiCall))]
         public class AntiBanCrash1
         {
-            public static bool enabled;
+            public static bool enabled = true;
 
             private static bool Prefix(object reqContainerObj)
             {

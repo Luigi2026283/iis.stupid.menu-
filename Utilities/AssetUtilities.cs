@@ -62,6 +62,8 @@ namespace iiMenu.Utilities
         }
 
         public static readonly Dictionary<string, AudioClip> audioFilePool = new Dictionary<string, AudioClip>();
+        private static readonly HashSet<string> remoteDownloadWarnings = new HashSet<string>();
+
         public static AudioClip LoadSoundFromFile(string fileName) // Thanks to ShibaGT for help with loading the audio from file
         {
             AudioClip sound;
@@ -93,6 +95,13 @@ namespace iiMenu.Utilities
                 Directory.CreateDirectory(directory);
 
             if (File.Exists(filePath)) return LoadSoundFromFile(fileName);
+            if (!PluginInfo.RemoteNetworkingEnabled)
+            {
+                if (remoteDownloadWarnings.Add($"audio::{fileName}"))
+                    LogManager.Log($"Remote networking disabled. Skipping audio download: {fileName}");
+                return null;
+            }
+
             LogManager.Log("Downloading " + fileName);
             using WebClient stream = new WebClient();
             stream.DownloadFile(resourcePath, filePath);
@@ -138,8 +147,20 @@ namespace iiMenu.Utilities
 
             if (!File.Exists(filePath))
             {
+                if (!PluginInfo.RemoteNetworkingEnabled)
+                {
+                    if (remoteDownloadWarnings.Add($"texture::{fileName}"))
+                        LogManager.Log($"Remote networking disabled. Skipping texture download: {fileName}");
+
+                    Texture2D fallbackTexture = new Texture2D(2, 2);
+                    fallbackTexture.SetPixels(new[] { Color.clear, Color.clear, Color.clear, Color.clear });
+                    fallbackTexture.Apply();
+                    textureUrlDictionary[resourcePath] = fallbackTexture;
+                    return fallbackTexture;
+                }
+
                 LogManager.Log("Downloading " + fileName);
-                WebClient stream = new WebClient();
+                using WebClient stream = new WebClient();
                 stream.DownloadFile(resourcePath, filePath);
             }
 

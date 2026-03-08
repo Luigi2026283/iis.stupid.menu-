@@ -222,6 +222,10 @@ C:\Users\wfe\source\repos\iis.stupid.menu-\obj\Release\netstandard2.1\iiMenu.sou
 C:\Users\wfe\source\repos\iis.stupid.menu-\obj\Release\netstandard2.1\iiMenu.csproj.Up2Date
 C:\Users\wfe\source\repos\iis.stupid.menu-\obj\Release\netstandard2.1\ii's Stupid Menu.dll
 C:\Users\wfe\source\repos\iis.stupid.menu-\obj\Release\netstandard2.1\ii's Stupid Menu.pdb
+C:\Users\wfe\source\repos\iis.stupid.menu\obj\Release\netstandard2.1\iiMenu.csproj.AssemblyReference.cache
+C:\Users\wfe\source\repos\iis.stupid.menu\obj\Release\netstandard2.1\iiMenu.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\wfe\source\repos\iis.stupid.menu\obj\Release\netstandard2.1\iiMenu.csproj.CoreCompileInputs.cache
+C:\Users\wfe\source\repos\iis.stupid.menu\obj\Release\netstandard2.1\iiMenu.sourcelink.json
 C:\Users\wfe\source\repos\iis.stupid.menu\bin\Release\netstandard2.1\ii's Stupid Menu.deps.json
 C:\Users\wfe\source\repos\iis.stupid.menu\bin\Release\netstandard2.1\ii's Stupid Menu.dll
 C:\Users\wfe\source\repos\iis.stupid.menu\bin\Release\netstandard2.1\ii's Stupid Menu.pdb
@@ -481,10 +485,6 @@ C:\Users\wfe\source\repos\iis.stupid.menu\bin\Release\netstandard2.1\BepInEx.Har
 C:\Users\wfe\source\repos\iis.stupid.menu\bin\Release\netstandard2.1\BepInEx.Preloader.xml
 C:\Users\wfe\source\repos\iis.stupid.menu\bin\Release\netstandard2.1\MonoMod.RuntimeDetour.xml
 C:\Users\wfe\source\repos\iis.stupid.menu\bin\Release\netstandard2.1\MonoMod.Utils.xml
-C:\Users\wfe\source\repos\iis.stupid.menu\obj\Release\netstandard2.1\iiMenu.csproj.AssemblyReference.cache
-C:\Users\wfe\source\repos\iis.stupid.menu\obj\Release\netstandard2.1\iiMenu.GeneratedMSBuildEditorConfig.editorconfig
-C:\Users\wfe\source\repos\iis.stupid.menu\obj\Release\netstandard2.1\iiMenu.csproj.CoreCompileInputs.cache
-C:\Users\wfe\source\repos\iis.stupid.menu\obj\Release\netstandard2.1\iiMenu.sourcelink.json
 C:\Users\wfe\source\repos\iis.stupid.menu\obj\Release\netstandard2.1\iiMenu.csproj.Up2Date
 C:\Users\wfe\source\repos\iis.stupid.menu\obj\Release\netstandard2.1\ii's Stupid Menu.dll
 C:\Users\wfe\source\repos\iis.stupid.menu\obj\Release\netstandard2.1\ii's Stupid Menu.pdb

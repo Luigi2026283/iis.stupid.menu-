@@ -121,6 +121,12 @@ namespace iiMenu.Managers
 
         public static void DownloadPlugin(string name, string url)
         {
+            if (!PluginInfo.RemoteNetworkingEnabled)
+            {
+                NotificationManager.SendNotification("<color=grey>[</color><color=red>ERROR</color><color=grey>]</color> Remote networking is disabled.");
+                return;
+            }
+
             if (name.Contains(".."))
                 name = name.Replace("..", "");
 
@@ -129,7 +135,7 @@ namespace iiMenu.Managers
             if (File.Exists($"{PluginInfo.BaseDirectory}/Plugins/" + filename))
                 File.Delete($"{PluginInfo.BaseDirectory}/Plugins/" + filename);
 
-            WebClient stream = new WebClient();
+            using WebClient stream = new WebClient();
             stream.DownloadFile(url, $"{PluginInfo.BaseDirectory}/Plugins/" + filename);
 
             LoadPlugins();
@@ -287,7 +293,19 @@ namespace iiMenu.Managers
 
         public static void LoadPluginLibrary()
         {
+            if (!PluginInfo.RemoteNetworkingEnabled)
+            {
+                NotificationManager.SendNotification("<color=grey>[</color><color=red>ERROR</color><color=grey>]</color> Remote networking is disabled.");
+                return;
+            }
+
             string library = GetHttp($"{PluginInfo.ServerResourcePath}/Plugins/PluginLibrary.txt");
+            if (string.IsNullOrWhiteSpace(library))
+            {
+                NotificationManager.SendNotification("<color=grey>[</color><color=red>ERROR</color><color=grey>]</color> Plugin library is unavailable.");
+                return;
+            }
+
             string[] plugins = AlphabetizeNoSkip(library.Split("\n"));
 
             List<ButtonInfo> buttonInfos = new List<ButtonInfo> { new ButtonInfo { buttonText = "Exit Plugin Library", method = () => Buttons.CurrentCategoryName = "Plugin Settings", isTogglable = false, toolTip = "Returns you back to the plugin settings." } };

@@ -5019,7 +5019,7 @@ namespace iiMenu.Mods
             if (Time.time > thingdeb)
             {
                 thingdeb = Time.time + 0.1f;
-                foreach (var plr in GorillaParent.instance.GetRigs().Where(plr => !plr.isLocal).Where(plr => plr.rightThumb.calcT > 0.5f))
+                foreach (var plr in GetActiveRigsSafe().Where(plr => !plr.isLocal && plr.rightThumb.calcT > 0.5f))
                 {
                     BetaSetVelocityPlayer(GetPlayerFromVRRig(plr), plr.headMesh.transform.forward * Movement._flySpeed);
                     RPCProtection();

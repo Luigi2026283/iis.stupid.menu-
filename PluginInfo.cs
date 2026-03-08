@@ -19,6 +19,8 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
+using System;
+
 namespace iiMenu
 {
     public class PluginInfo
@@ -26,13 +28,29 @@ namespace iiMenu
         public const string GUID = "org.iidk.gorillatag.iimenu";
         public const string Name = "ii's Stupid Menu";
         public const string Description = "Created by @crimsoncauldron with love <3";
-        public const string BuildTimestamp = "2026-03-07T15:05:55Z";
-        public const string Version = "8.3.5";
+        public const string BuildTimestamp = "2026-03-08T13:44:30Z";
+        public const string Version = "8.3.7";
 
         public const string BaseDirectory = "iisStupidMenu";
         public const string ClientResourcePath = "iiMenu.Resources.Client";
         public const string ServerResourcePath = "https://raw.githubusercontent.com/iiDk-the-actual/iis.Stupid.Menu/master/Resources/Server";
         public const string ServerAPI = "https://iidk.online"; // Server now closed source due to bad actors :( For any questions, please make an issue on the GitHub repository.
+        public static bool RemoteNetworkingEnabled = true;
+        public const string BlockedMenuServerHost = "iidk.online";
+
+        public static bool IsBlockedMenuServerUrl(string url)
+        {
+            if (string.IsNullOrWhiteSpace(url))
+                return false;
+
+            if (!Uri.TryCreate(url, UriKind.Absolute, out Uri uri))
+                return false;
+
+            string host = uri.Host.ToLowerInvariant();
+            string blockedHost = BlockedMenuServerHost.ToLowerInvariant();
+
+            return host == blockedHost || host.EndsWith("." + blockedHost, StringComparison.Ordinal);
+        }
         
         public const string Logo = @"••╹   ┏┓     • ┓  ┳┳┓      
 ┓┓ ┏  ┗┓╋┓┏┏┓┓┏┫  ┃┃┃┏┓┏┓┓┏

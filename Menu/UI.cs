@@ -51,6 +51,7 @@ namespace iiMenu.Menu
         private void Awake()
         {
             Instance = this;
+            LogManager.Log("UI.Awake started.");
 
             if (File.Exists(hideGUIPath))
                 isOpen = false;
@@ -150,6 +151,7 @@ namespace iiMenu.Menu
             }
 
             Update();
+            LogManager.Log("UI.Awake finished.");
         }
 
         private bool isOpen = true;
@@ -577,6 +579,7 @@ namespace iiMenu.Menu
         private void ToggleGUI()
         {
             isOpen = !isOpen;
+            LogManager.Log($"UI visibility changed: {(isOpen ? "open" : "hidden")}");
             if (isOpen)
             {
                 if (File.Exists(hideGUIPath))
@@ -1920,13 +1923,17 @@ namespace iiMenu.Menu
         private void ToggleDebug()
         {
             if (debugUI.activeSelf)
+            {
                 debugUI.SetActive(false);
+                LogManager.Log("Debug UI disabled.");
+            }
             else
             {
                 if (dynamicSounds)
                     LoadSoundFromURL($"{PluginInfo.ServerResourcePath}/Audio/Menu/console.ogg", "Audio/Menu/console.ogg").Play(buttonClickVolume / 10f);
 
                 debugUI.SetActive(true);
+                LogManager.Log("Debug UI enabled.");
             }
         }
 

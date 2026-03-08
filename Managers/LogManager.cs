@@ -4,31 +4,50 @@
  *
  * Copyright (C) 2026  Goldentrophy Software
  * https://github.com/iiDk-the-actual/iis.Stupid.Menu
- * 
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+
+using BepInEx.Logging;
+using System;
 
 namespace iiMenu.Managers
 {
     public class LogManager
     {
+        private static bool initialized;
+        public static string LogFilePath { get; private set; } = string.Empty;
+
+        // Intentionally disabled: no runtime .txt file logging.
+        public static void Initialize()
+        {
+            initialized = true;
+            LogFilePath = string.Empty;
+        }
+
+        public static void Shutdown() =>
+            initialized = false;
+
         /// <summary>
         /// Logs an informational message.
         /// </summary>
         /// <param name="log">The message or object to log.</param>
-        public static void Log(object log) =>
-            Plugin.PluginLogger.LogInfo(log);
+        public static void Log(object log)
+        {
+            string message = SafeToString(log);
+            TryLogToBepInEx(logger => logger.LogInfo(message));
+        }
 
         /// <summary>
         /// Logs a formatted informational message.
@@ -36,14 +55,45 @@ namespace iiMenu.Managers
         /// <param name="log">The message format string.</param>
         /// <param name="args">Arguments to format the message.</param>
         public static void Log(object log, object[] args) =>
-            Plugin.PluginLogger.LogInfo(string.Format(log.ToString(), args));
+            Log(SafeFormat(log, args));
+
+        /// <summary>
+        /// Logs a warning message.
+        /// </summary>
+        /// <param name="log">The warning message or object to log.</param>
+        public static void LogWarning(object log)
+        {
+            string message = SafeToString(log);
+            TryLogToBepInEx(logger => logger.LogWarning(message));
+        }
+
+        /// <summary>
+        /// Logs a formatted warning message.
+        /// </summary>
+        /// <param name="log">The warning message format string.</param>
+        /// <param name="args">Arguments to format the warning message.</param>
+        public static void LogWarning(object log, object[] args) =>
+            LogWarning(SafeFormat(log, args));
+
+        /// <summary>
+        /// Logs a debug message.
+        /// </summary>
+        /// <param name="log">The debug message or object to log.</param>
+        public static void LogDebug(object log)
+        {
+            string message = SafeToString(log);
+            TryLogToBepInEx(logger => logger.LogDebug(message));
+        }
 
         /// <summary>
         /// Logs an error message.
         /// </summary>
         /// <param name="log">The error message or object to log.</param>
-        public static void LogError(object log) =>
-            Plugin.PluginLogger.LogError(log);
+        public static void LogError(object log)
+        {
+            string message = SafeToString(log);
+            TryLogToBepInEx(logger => logger.LogError(message));
+        }
 
         /// <summary>
         /// Logs a formatted error message.
@@ -51,21 +101,35 @@ namespace iiMenu.Managers
         /// <param name="log">The error message format string.</param>
         /// <param name="args">Arguments to format the error message.</param>
         public static void LogError(object log, object[] args) =>
-            Plugin.PluginLogger.LogError(string.Format(log.ToString(), args));
+            LogError(SafeFormat(log, args));
 
-        /// <summary>
-        /// Logs a warning message (as debug).
-        /// </summary>
-        /// <param name="log">The warning message or object to log.</param>
-        public static void LogWarning(object log) =>
-            Plugin.PluginLogger.LogDebug(log);
+        private static void TryLogToBepInEx(Action<ManualLogSource> loggerAction)
+        {
+            try
+            {
+                if (initialized && Plugin.instance != null)
+                    loggerAction(Plugin.PluginLogger);
+            }
+            catch
+            {
+                // avoid recursion/crash from logging failures
+            }
+        }
 
-        /// <summary>
-        /// Logs a formatted warning message (as debug).
-        /// </summary>
-        /// <param name="log">The warning message format string.</param>
-        /// <param name="args">Arguments to format the warning message.</param>
-        public static void LogWarning(object log, object[] args) =>
-            Plugin.PluginLogger.LogDebug(string.Format(log.ToString(), args));
+        private static string SafeFormat(object format, object[] args)
+        {
+            string formatText = SafeToString(format);
+            try
+            {
+                return string.Format(formatText, args ?? Array.Empty<object>());
+            }
+            catch
+            {
+                return formatText;
+            }
+        }
+
+        private static string SafeToString(object value) =>
+            value?.ToString() ?? "null";
     }
 }

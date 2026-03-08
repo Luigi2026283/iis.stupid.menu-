@@ -148,7 +148,19 @@ namespace iiMenu.Mods
 
         public static void LoadSoundLibrary()
         {
+            if (!PluginInfo.RemoteNetworkingEnabled)
+            {
+                NotificationManager.SendNotification("<color=grey>[</color><color=red>ERROR</color><color=grey>]</color> Remote networking is disabled.");
+                return;
+            }
+
             string library = GetHttp($"{PluginInfo.ServerResourcePath}/Audio/Mods/Fun/Soundboard/SoundLibrary.txt");
+            if (string.IsNullOrWhiteSpace(library))
+            {
+                NotificationManager.SendNotification("<color=grey>[</color><color=red>ERROR</color><color=grey>]</color> Sound library is unavailable.");
+                return;
+            }
+
             string[] audios = AlphabetizeNoSkip(library.Split("\n"));
             List<ButtonInfo> soundbuttons = new List<ButtonInfo> { new ButtonInfo { buttonText = "Exit Sound Library", method = () => LoadSoundboard(), isTogglable = false, toolTip = "Returns you back to the soundboard." } };
             int index = 0;
@@ -180,6 +192,12 @@ namespace iiMenu.Mods
             audioFilePool.Remove(name);
             
             AudioClip soundDownloaded = LoadSoundFromURL(url, filename);
+            if (soundDownloaded == null)
+            {
+                NotificationManager.SendNotification("<color=grey>[</color><color=red>ERROR</color><color=grey>]</color> Could not download sound.");
+                return;
+            }
+
             if (soundDownloaded.length < 20f)
                 Play2DAudio(soundDownloaded);
             

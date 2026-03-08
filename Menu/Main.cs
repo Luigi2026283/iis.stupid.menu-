@@ -119,6 +119,8 @@ namespace iiMenu.Menu
         /// </summary>
         public static void OnLaunch()
         {
+            LogManager.Log("Main.OnLaunch started.");
+
             if (CoroutineManager.instance == null)
                 LogManager.LogError("CoroutineManager instance is null on menu launch. Features may not function properly.");
 
@@ -151,13 +153,12 @@ namespace iiMenu.Menu
 
             fullModAmount ??= Buttons.buttons.SelectMany(list => list).ToArray().Length;
 
-            GameObject ConsoleObject = Console.LoadConsoleImmediately();
+            GameObject managerRoot = GameObject.Find("iiMenu_ManagerRoot") ?? new GameObject("iiMenu_ManagerRoot");
+            if (managerRoot.GetComponent<FriendManager>() == null)
+                managerRoot.AddComponent<FriendManager>();
 
-            if (ServerData.ServerDataEnabled)
-            {
-                ConsoleObject.AddComponent<FriendManager>();
-                ConsoleObject.AddComponent<PatreonManager>();
-            }
+            if (PluginInfo.RemoteNetworkingEnabled && ServerData.ServerDataEnabled && managerRoot.GetComponent<PatreonManager>() == null)
+                managerRoot.AddComponent<PatreonManager>();
 
             try
             {
@@ -216,19 +217,16 @@ namespace iiMenu.Menu
             }
 
             loadPreferencesTime = Time.time;
-            if (File.Exists($"{PluginInfo.BaseDirectory}/iiMenu_Preferences.txt"))
+            try
             {
-                try
-                {
-                    Settings.LoadPreferences();
-                }
-                catch (Exception exc)
-                {
-                    LogManager.LogError(
-                    $"Error with Settings.LoadPreferences() at {exc.StackTrace}: {exc.Message}");
+                Settings.LoadPreferences();
+            }
+            catch (Exception exc)
+            {
+                LogManager.LogError(
+                $"Error with Settings.LoadPreferences() at {exc.StackTrace}: {exc.Message}");
 
-                    CoroutineManager.instance.StartCoroutine(DelayLoadPreferences());
-                }
+                CoroutineManager.instance.StartCoroutine(DelayLoadPreferences());
             }
 
             try
@@ -4306,18 +4304,37 @@ namespace iiMenu.Menu
         /// </summary>
         /// <param name="url">URL</param>
         /// <returns>Website Data</returns>
+        private static bool remoteHttpWarningLogged;
         public static string GetHttp(string url)
         {
-            WebRequest request = WebRequest.Create(url);
-            WebResponse response = request.GetResponse();
-            Stream data = response.GetResponseStream();
-            string html = "";
+            if (!PluginInfo.RemoteNetworkingEnabled)
+            {
+                if (!remoteHttpWarningLogged)
+                {
+                    LogManager.Log("Remote networking disabled. Blocking menu HTTP requests.");
+                    remoteHttpWarningLogged = true;
+                }
 
-            if (data == null) return html;
-            using StreamReader sr = new StreamReader(data);
-            html = sr.ReadToEnd();
+                return string.Empty;
+            }
 
-            return html;
+            try
+            {
+                WebRequest request = WebRequest.Create(url);
+                using WebResponse response = request.GetResponse();
+                using Stream data = response.GetResponseStream();
+
+                if (data == null)
+                    return string.Empty;
+
+                using StreamReader sr = new StreamReader(data);
+                return sr.ReadToEnd();
+            }
+            catch (Exception exception)
+            {
+                LogManager.LogError($"GetHttp failed for {url}: {exception.Message}");
+                return string.Empty;
+            }
         }
 
         private static readonly List<float> volumeArchive = new List<float>();
@@ -4648,7 +4665,11 @@ namespace iiMenu.Menu
         {
             GorillaParent parent = GorillaParent.instance;
             if (parent == null)
-                return Array.Empty<VRRig>();
+                return iiMenu.Utilities.RigUtilities.GetActiveRigsSafe();
+
+            List<VRRig> activeRigs = parent.GetRigs();
+            if (activeRigs.Count > 0)
+                return activeRigs;
 
             if (!_rigCollectionResolverInitialized)
             {
@@ -4776,14 +4797,29 @@ namespace iiMenu.Menu
 
             if (!File.Exists(filePath))
             {
+                if (!PluginInfo.RemoteNetworkingEnabled)
+                {
+                    LogManager.Log("Remote networking is disabled. Skipping TTS download.");
+                    onComplete?.Invoke(null);
+                    yield break;
+                }
+
                 switch (narratorIndex)
                 {
                     // My endpoint
                     case 0:
                         {
+                            string endpoint = $"{PluginInfo.ServerAPI}/tts";
+                            if (PluginInfo.IsBlockedMenuServerUrl(endpoint))
+                            {
+                                LogManager.Log("Blocked menu server endpoint: " + endpoint);
+                                onComplete?.Invoke(null);
+                                yield break;
+                            }
+
                             string postData = JsonConvert.SerializeObject(new { text });
 
-                            using UnityWebRequest request = new UnityWebRequest($"{PluginInfo.ServerAPI}/tts", "POST");
+                            using UnityWebRequest request = new UnityWebRequest(endpoint, "POST");
                             byte[] raw = Encoding.UTF8.GetBytes(postData);
 
                             request.uploadHandler = new UploadHandlerRaw(raw);
@@ -6225,8 +6261,24 @@ namespace iiMenu.Menu
         /// <param name="fromMenu">true to indicate the toggle was initiated from the menu interface; otherwise, false. Affects notification
         /// display and certain toggle behaviors.</param>
         /// <param name="ignoreForce">true to bypass force-related checks and restrictions during the toggle operation; otherwise, false.</param>
+        private static void QueuePreferenceAutosave()
+        {
+            if (Lockdown)
+                return;
+
+            // Avoid immediate writes while a preference file is being applied.
+            if (Settings.loadingPreferencesFrame + 2 >= Time.frameCount)
+                return;
+
+            float saveSoonAt = Time.time + 2f;
+            if (autoSaveDelay < Time.time || autoSaveDelay > saveSoonAt)
+                autoSaveDelay = saveSoonAt;
+        }
+
         public static void Toggle(string buttonText, bool fromMenu = false, bool ignoreForce = false)
         {
+            LogManager.LogDebug($"Toggle requested: button='{buttonText}', fromMenu={fromMenu}, ignoreForce={ignoreForce}");
+
             switch (buttonText)
             {
                 case "PreviousPage":
@@ -6364,6 +6416,7 @@ namespace iiMenu.Menu
                                 if (target.isTogglable)
                                 {
                                     target.enabled = !target.enabled;
+                                    LogManager.Log($"Toggle applied: {target.buttonText} => {(target.enabled ? "enabled" : "disabled")} (fromMenu={fromMenu})");
                                     if (target.enabled)
                                     {
                                         if (fromMenu)
@@ -6407,6 +6460,8 @@ namespace iiMenu.Menu
                                     if (dynamicAnimations)
                                         lastClickedName = target.buttonText;
 
+                                    LogManager.Log($"Action executed: {target.buttonText} (fromMenu={fromMenu})");
+
                                     if (fromMenu)
                                         NotificationManager.SendNotification("<color=grey>[</color><color=green>ENABLE</color><color=grey>]</color> " + target.toolTip);
 
@@ -6435,6 +6490,9 @@ namespace iiMenu.Menu
                 }
             }
 
+            if (buttonText != "PreviousPage" && buttonText != "NextPage")
+                QueuePreferenceAutosave();
+
             if (!clickGUI)
                 ReloadMenu();
         }
@@ -6460,7 +6518,9 @@ namespace iiMenu.Menu
         /// <param name="buttonText">The text label of the button to be toggled. This is used to identify the target button.</param>
         /// <param name="increment">true to apply the incremental action; false to apply the decremental action.</param>
         public static void ToggleIncremental(string buttonText, bool increment, bool reload = true)
-        { 
+        {
+            LogManager.LogDebug($"ToggleIncremental requested: button='{buttonText}', increment={increment}, reload={reload}");
+
             ButtonInfo target = Buttons.GetIndex(buttonText);
             if (target != null)
             {
@@ -6578,6 +6638,7 @@ namespace iiMenu.Menu
                                 lastClickedName = buttonText + (increment ? "+" : "-");
 
                             bool boost = incrementalBoost && rightGrab;
+                            LogManager.Log($"Incremental action: {target.buttonText}, increment={increment}, boost={boost}");
                             if (increment)
                             {
                                 NotificationManager.SendNotification($"<color=grey>[</color><color=green>INCREMENT</color><color=grey>]</color> {target.toolTip}");
@@ -6635,6 +6696,8 @@ namespace iiMenu.Menu
             else
                 LogManager.LogError($"{buttonText} does not exist");
 
+            QueuePreferenceAutosave();
+
             if (!clickGUI && reload)
                 ReloadMenu();
         }
@@ -6647,6 +6710,7 @@ namespace iiMenu.Menu
 
         public static void UnloadMenu()
         {
+            LogManager.Log("Main.UnloadMenu started.");
             Settings.Panic();
             CustomBoardManager.CustomBoardsEnabled = false;
             CustomBoardManager.CustomBoardFonts = false;

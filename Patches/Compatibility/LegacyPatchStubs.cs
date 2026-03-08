@@ -1,3 +1,7 @@
+using GorillaTagScripts;
+using HarmonyLib;
+using iiMenu.Managers;
+using iiMenu.Patches;
 using Photon.Pun;
 using Photon.Realtime;
 using Photon.Voice;
@@ -5,6 +9,7 @@ using Photon.Voice.Unity;
 using PlayFab;
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using UnityEngine;
 
 namespace iiMenu.Patches.Menu
@@ -15,6 +20,98 @@ namespace iiMenu.Patches.Menu
     public class AntiCrashPatches
     {
         public static bool enabled;
+
+        private static int builderSuppressedCount;
+        private static float builderNextSummaryTime;
+        private static Type builderPieceType;
+
+        private static Exception SuppressBuilderColliderNullReference(Exception exception, string source)
+        {
+            if (exception is NullReferenceException nullReferenceException)
+            {
+                string stackTrace = nullReferenceException.StackTrace ?? string.Empty;
+                if (stackTrace.IndexOf("BuilderPiece.SetCollidersEnabled", StringComparison.Ordinal) >= 0 ||
+                    source.IndexOf("BuilderPiece", StringComparison.Ordinal) >= 0 ||
+                    source.IndexOf("BuilderPool", StringComparison.Ordinal) >= 0)
+                {
+                    builderSuppressedCount++;
+                    if (Time.realtimeSinceStartup >= builderNextSummaryTime)
+                    {
+                        builderNextSummaryTime = Time.realtimeSinceStartup + 2f;
+                        LogManager.LogWarning($"Suppressed builder crash loop ({builderSuppressedCount} suppressed). Source: {source}");
+                    }
+
+                    return null;
+                }
+            }
+
+            return exception;
+        }
+
+        private static Type ResolveBuilderPieceType()
+        {
+            if (builderPieceType != null)
+                return builderPieceType;
+
+            Assembly gameAssembly = typeof(BuilderPool).Assembly;
+            builderPieceType = gameAssembly.GetType("GorillaTagScripts.Builder.BuilderPiece", false)
+                               ?? gameAssembly.GetType("GorillaTagScripts.BuilderPiece", false)
+                               ?? gameAssembly.GetType("BuilderPiece", false);
+
+            if (builderPieceType == null)
+            {
+                foreach (Type type in gameAssembly.GetTypes())
+                {
+                    if (type.Name == "BuilderPiece")
+                    {
+                        builderPieceType = type;
+                        break;
+                    }
+                }
+            }
+
+            return builderPieceType;
+        }
+
+        // Intentionally not patched:
+        // BuilderPiece.SetCollidersEnabled is a generic method in this game build and
+        // Harmony can throw IL import errors when patching it directly.
+
+        [PatchHandler.PatchOnAwake]
+        [HarmonyPatch]
+        internal static class BuilderPieceAwakePatch
+        {
+            private static MethodBase TargetMethod()
+            {
+                Type type = ResolveBuilderPieceType();
+                return type?.GetMethod("Awake", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            }
+
+            private static Exception Finalizer(Exception __exception) =>
+                SuppressBuilderColliderNullReference(__exception, "BuilderPiece.Awake");
+        }
+
+        [PatchHandler.PatchOnAwake]
+        [HarmonyPatch]
+        internal static class BuilderPoolAddToPoolPatch
+        {
+            private static MethodBase TargetMethod() =>
+                AccessTools.Method(typeof(BuilderPool), "AddToPool", new[] { typeof(int), typeof(int) });
+
+            private static Exception Finalizer(Exception __exception) =>
+                SuppressBuilderColliderNullReference(__exception, "BuilderPool.AddToPool");
+        }
+
+        [PatchHandler.PatchOnAwake]
+        [HarmonyPatch]
+        internal static class BuilderPoolSimpleWorkPatch
+        {
+            private static MethodBase TargetMethod() =>
+                AccessTools.Method(typeof(BuilderPool), nameof(BuilderPool.SimpleWork), Type.EmptyTypes);
+
+            private static Exception Finalizer(Exception __exception) =>
+                SuppressBuilderColliderNullReference(__exception, "BuilderPool.SimpleWork");
+        }
     }
 
     public class BuildPatch

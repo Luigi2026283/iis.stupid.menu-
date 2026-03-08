@@ -36,6 +36,9 @@ namespace iiMenu.Utilities
     public static class RigUtilities
     {
         private static readonly BindingFlags AnyMember = BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+        private static bool _vrRigCacheMembersResolved;
+        private static Func<object> _vrRigCacheInstanceGetter;
+        private static Func<object, IEnumerable<VRRig>> _vrRigCacheActiveRigsGetter;
 
         public static VRRig GetVRRigFromPlayer(NetPlayer p) =>
             GorillaGameManager.StaticFindRigForPlayer(p);
@@ -128,8 +131,11 @@ namespace iiMenu.Utilities
 
         public static List<VRRig> GetRigs(this GorillaParent parent)
         {
+            if (TryGetActiveRigsFromCache(out List<VRRig> cachedRigs))
+                return cachedRigs;
+
             if (parent == null)
-                return new List<VRRig>();
+                return UnityEngine.Object.FindObjectsByType<VRRig>(FindObjectsSortMode.None).Where(rig => rig != null).ToList();
 
             if (TryReadRigList(parent, "vrrigs", out List<VRRig> rigs))
                 return rigs;
@@ -138,7 +144,96 @@ namespace iiMenu.Utilities
             if (TryReadRigList(parent, "allVrrigs", out rigs))
                 return rigs;
 
-            return UnityEngine.Object.FindObjectsByType<VRRig>(FindObjectsSortMode.None).ToList();
+            return UnityEngine.Object.FindObjectsByType<VRRig>(FindObjectsSortMode.None).Where(rig => rig != null).ToList();
+        }
+
+        public static List<VRRig> GetActiveRigsSafe() =>
+            GorillaParent.instance.GetRigs();
+
+        private static bool TryGetActiveRigsFromCache(out List<VRRig> rigs)
+        {
+            rigs = null;
+            ResolveVRRigCacheMembers();
+            if (_vrRigCacheInstanceGetter == null || _vrRigCacheActiveRigsGetter == null)
+                return false;
+
+            try
+            {
+                object instance = _vrRigCacheInstanceGetter();
+                if (instance == null)
+                    return false;
+
+                IEnumerable<VRRig> activeRigs = _vrRigCacheActiveRigsGetter(instance);
+                if (activeRigs == null)
+                    return false;
+
+                List<VRRig> cacheList = activeRigs.Where(rig => rig != null).ToList();
+                if (cacheList.Count == 0)
+                    return false;
+
+                rigs = cacheList;
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static void ResolveVRRigCacheMembers()
+        {
+            if (_vrRigCacheMembersResolved)
+                return;
+            _vrRigCacheMembersResolved = true;
+
+            Type cacheType = AppDomain.CurrentDomain
+                .GetAssemblies()
+                .SelectMany(assembly =>
+                {
+                    try { return assembly.GetTypes(); }
+                    catch { return Array.Empty<Type>(); }
+                })
+                .FirstOrDefault(type => type != null && (type.Name == "VRRigCache" || type.FullName?.EndsWith(".VRRigCache", StringComparison.Ordinal) == true));
+
+            if (cacheType == null)
+                return;
+
+            FieldInfo instanceField = cacheType.GetField("instance", AnyMember) ??
+                                      cacheType.GetField("Instance", AnyMember);
+            PropertyInfo instanceProperty = cacheType.GetProperty("instance", AnyMember) ??
+                                            cacheType.GetProperty("Instance", AnyMember);
+
+            if (instanceField != null)
+                _vrRigCacheInstanceGetter = () => instanceField.GetValue(null);
+            else if (instanceProperty != null && instanceProperty.CanRead)
+                _vrRigCacheInstanceGetter = () => instanceProperty.GetValue(null, null);
+
+            string[] activeRigNames =
+            {
+                "ActiveRigs",
+                "activeRigs",
+                "Rigs",
+                "rigs"
+            };
+
+            foreach (string memberName in activeRigNames)
+            {
+                FieldInfo rigsField = cacheType.GetField(memberName, AnyMember);
+                if (rigsField != null && typeof(IEnumerable<VRRig>).IsAssignableFrom(rigsField.FieldType))
+                {
+                    _vrRigCacheActiveRigsGetter = instance => rigsField.GetValue(instance) as IEnumerable<VRRig>;
+                    return;
+                }
+
+                PropertyInfo rigsProperty = cacheType.GetProperty(memberName, AnyMember);
+                if (rigsProperty != null &&
+                    rigsProperty.CanRead &&
+                    typeof(IEnumerable<VRRig>).IsAssignableFrom(rigsProperty.PropertyType))
+                {
+                    _vrRigCacheActiveRigsGetter = instance => rigsProperty.GetValue(instance, null) as IEnumerable<VRRig>;
+                    return;
+                }
+            }
         }
 
         private static bool TryReadRigList(GorillaParent parent, string memberName, out List<VRRig> rigs)

@@ -90,6 +90,37 @@ namespace iiMenu.Managers
             return ui.GetComponentInChildren<TextMeshPro>(true);
         }
 
+        private static GameObject FindBoardObject(string parentPath, int fallbackIndex)
+        {
+            GameObject parentObject = GetObject(parentPath);
+            if (parentObject == null)
+                return null;
+
+            List<GameObject> candidates = parentObject.transform.Children()
+                .Where(t => t != null && t.name.Contains("UnityTempFile"))
+                .ToList();
+
+            if (candidates.Count == 0)
+                return null;
+
+            GameObject preferred = candidates
+                .Where(t => t.GetComponent<Renderer>() != null)
+                .OrderByDescending(t => t.GetComponentsInChildren<TextMeshPro>(true).Length)
+                .ThenByDescending(t => t.name.IndexOf("score", StringComparison.OrdinalIgnoreCase) >= 0 ? 1 : 0)
+                .FirstOrDefault();
+
+            if (preferred != null)
+                return preferred;
+
+            if (fallbackIndex >= 0 && fallbackIndex < candidates.Count)
+                return candidates[fallbackIndex];
+
+            return candidates.FirstOrDefault();
+        }
+
+        private static Renderer GetBoardRenderer(string parentPath, int fallbackIndex) =>
+            FindBoardObject(parentPath, fallbackIndex)?.GetComponent<Renderer>();
+
         public void Awake()
         {
             instance = this;
@@ -146,27 +177,7 @@ namespace iiMenu.Managers
                         catch { }
                     }
 
-                    var stumpChildren = GetObject("Environment Objects/LocalObjects_Prefab/TreeRoom").transform.Children()
-                                   .Where(x => x.name.Contains("UnityTempFile"))
-                                   .ToList();
-
-                    if (StumpLeaderboardIndex >= 0 && StumpLeaderboardIndex < stumpChildren.Count)
-                    {
-                        var stumpBoard = stumpChildren[StumpLeaderboardIndex];
-                        if (stumpBoard != null && instance.stumpMaterial != null)
-                            stumpBoard.GetComponent<Renderer>().material = instance.stumpMaterial;
-                    }
-
-                    var forestChildren = GetObject("Environment Objects/LocalObjects_Prefab/Forest").transform.Children()
-                        .Where(x => x.name.Contains("UnityTempFile"))
-                        .ToList();
-
-                    if (ForestLeaderboardIndex >= 0 && ForestLeaderboardIndex < forestChildren.Count)
-                    {
-                        var forestBoard = forestChildren[ForestLeaderboardIndex];
-                        if (forestBoard != null && instance.forestMaterial != null)
-                            forestBoard.GetComponent<Renderer>().material = instance.forestMaterial;
-                    }
+                    // Keep map geometry untouched; only restore objects we explicitly create/manage.
 
                     foreach (GameObject board in instance.objectBoards.Values)
                         Destroy(board);
@@ -226,11 +237,11 @@ namespace iiMenu.Managers
 
         #region Game Boards
         public const int StumpLeaderboardIndex = 3;
-        public const int ForestLeaderboardIndex = 2;
+        public const int ForestLeaderboardIndex = 3;
 
         public const string StaticMotdTemplate =
             "The server is currently still in development.\n" +
-            "Version: 8.3.5\n" +
+            "Version: 8.3.7\n" +
             "Best regards, Luigi_2026_";
 
         public static string motdTemplate = StaticMotdTemplate;
@@ -258,37 +269,9 @@ namespace iiMenu.Managers
 
                     objectBoards.Clear();
 
-                    var stumpChildren = GetObject("Environment Objects/LocalObjects_Prefab/TreeRoom").transform.Children()
-                       .Where(x => x.name.Contains("UnityTempFile"))
-                       .ToList();
-
-                    if (StumpLeaderboardIndex >= 0 && StumpLeaderboardIndex < stumpChildren.Count)
-                    {
-                        var stumpBoard = stumpChildren[StumpLeaderboardIndex];
-                        if (stumpBoard != null)
-                        {
-                            if (stumpMaterial == null)
-                                stumpMaterial = stumpBoard.GetComponent<Renderer>().material;
-
-                            stumpBoard.GetComponent<Renderer>().material = BoardMaterial;
-                        }
-                    }
-
-                    var forestChildren = GetObject("Environment Objects/LocalObjects_Prefab/Forest").transform.Children()
-                        .Where(x => x.name.Contains("UnityTempFile"))
-                        .ToList();
-
-                    if (ForestLeaderboardIndex >= 0 && ForestLeaderboardIndex < forestChildren.Count)
-                    {
-                        var forestBoard = forestChildren[ForestLeaderboardIndex];
-                        if (forestBoard != null)
-                        {
-                            if (forestMaterial == null)
-                                forestMaterial = forestBoard.GetComponent<Renderer>().material;
-
-                            forestBoard.GetComponent<Renderer>().material = BoardMaterial;
-                        }
-                    }
+                    // Do not recolor TreeRoom/Forest UnityTempFile meshes here.
+                    // In recent game builds the target object order changed, causing map textures (floor/ramps/trees)
+                    // to be overwritten with menu materials.
 
                     foreach (GorillaNetworkJoinTrigger joinTrigger in GetJoinTriggers())
                     {

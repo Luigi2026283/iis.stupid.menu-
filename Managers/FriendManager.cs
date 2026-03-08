@@ -362,7 +362,7 @@ namespace iiMenu.Managers
 
         public static NetPlayer[] GetAllFriendsInRoom()
         {
-            return !NetworkSystem.Instance.InRoom
+            return !NetworkSystem.Instance.InRoom || instance == null || instance.Friends?.friends == null
                 ? Array.Empty<NetPlayer>()
                 : NetworkSystem.Instance.PlayerListOthers
                 .Where(player => instance.Friends.friends.Values
@@ -384,6 +384,7 @@ namespace iiMenu.Managers
         }
 
         public static bool IsPlayerFriend(NetPlayer Player) =>
+            Player != null && instance != null && instance.Friends?.friends != null &&
             instance.Friends.friends.Values.Any(friend => friend.currentUserID == Player.UserId);
 
         private static readonly Dictionary<VRRig, GameObject> leftPlatform = new Dictionary<VRRig, GameObject>();
@@ -705,7 +706,16 @@ namespace iiMenu.Managers
                 yield break;
             }
 
-            using UnityWebRequest request = new UnityWebRequest($"{PluginInfo.ServerAPI}/getfriends", "GET");
+            string endpoint = $"{PluginInfo.ServerAPI}/getfriends";
+            if (PluginInfo.IsBlockedMenuServerUrl(endpoint))
+            {
+                LogManager.Log("Blocked menu server endpoint: " + endpoint);
+                Friends = CreateEmptyFriendData();
+                FriendsListUpdated();
+                yield break;
+            }
+
+            using UnityWebRequest request = new UnityWebRequest(endpoint, "GET");
             byte[] bodyRaw = Encoding.UTF8.GetBytes("{}");
             request.uploadHandler = new UploadHandlerRaw(bodyRaw);
             request.downloadHandler = new DownloadHandlerBuffer();
@@ -954,7 +964,14 @@ namespace iiMenu.Managers
                 yield break;
             }
 
-            UnityWebRequest request = new UnityWebRequest($"{PluginInfo.ServerAPI}/{action}", "POST");
+            string endpoint = $"{PluginInfo.ServerAPI}/{action}";
+            if (PluginInfo.IsBlockedMenuServerUrl(endpoint))
+            {
+                failure?.Invoke("Blocked remote endpoint");
+                yield break;
+            }
+
+            UnityWebRequest request = new UnityWebRequest(endpoint, "POST");
 
             string json = JsonConvert.SerializeObject(new { uid });
 
@@ -1458,6 +1475,14 @@ namespace iiMenu.Managers
 
                 if (ws != null && (ws.State == WebSocketState.Open || ws.State == WebSocketState.Connecting))
                     return;
+
+                if (Uri.TryCreate(FriendWebsocket, UriKind.Absolute, out Uri endpoint) &&
+                    PluginInfo.IsBlockedMenuServerUrl($"https://{endpoint.Host}"))
+                {
+                    connected = false;
+                    LogManager.Log("Blocked menu server endpoint: " + FriendWebsocket);
+                    return;
+                }
 
                 try
                 {

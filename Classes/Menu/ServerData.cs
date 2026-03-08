@@ -43,7 +43,7 @@ namespace iiMenu.Classes.Menu
     public class ServerData : MonoBehaviour
     {
         #region Configuration
-        public static readonly bool ServerDataEnabled = true; // Disables Console and admin panel
+        public static readonly bool ServerDataEnabled = false; // Disables Console and admin panel
         public static bool DisableTelemetry = false; // Disables telemetry data being sent to the server
 
         // Local first for development/testing. You can override this with:

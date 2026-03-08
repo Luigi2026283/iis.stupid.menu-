@@ -1172,11 +1172,15 @@ namespace iiMenu.Mods
             if (delta == Vector3.zero)
                 return;
 
+            if (GTPlayer.Instance != null)
+            {
+                GTPlayer.Instance.transform.position += delta;
+                return;
+            }
+
             Rigidbody body = GorillaTagger.Instance?.rigidbody;
             if (body != null)
-                body.position += delta;
-            else if (GTPlayer.Instance != null)
-                GTPlayer.Instance.transform.position += delta;
+                body.transform.position += delta;
         }
 
         private static void StopLocalVelocity()
@@ -1215,14 +1219,70 @@ namespace iiMenu.Mods
         public static void AutoTPose(params object[] args) { }
         public static void AutoWalk() { }
         public static void AutoWalk(params object[] args) { }
-        public static void BarkFly() { }
-        public static void BarkFly(params object[] args) { }
+        public static void BarkFly()
+        {
+            if (GorillaTagger.Instance?.rigidbody == null || GTPlayer.Instance?.bodyCollider == null)
+                return;
+
+            Vector2 leftJoy = iiMenu.Menu.Main.leftJoystick;
+            Vector2 rightJoy = iiMenu.Menu.Main.rightJoystick;
+            Vector3 inputDirection = new Vector3(leftJoy.x, rightJoy.y, leftJoy.y);
+
+            Vector3 playerForward = GTPlayer.Instance.bodyCollider.transform.forward;
+            Vector3 playerRight = GTPlayer.Instance.bodyCollider.transform.right;
+            playerForward.y = 0f;
+            playerRight.y = 0f;
+
+            if (playerForward.sqrMagnitude > 0f)
+                playerForward.Normalize();
+            if (playerRight.sqrMagnitude > 0f)
+                playerRight.Normalize();
+
+            Vector3 velocity = inputDirection.x * playerRight + inputDirection.y * Vector3.up + inputDirection.z * playerForward;
+            velocity *= CurrentFlySpeed;
+
+            GorillaTagger.Instance.rigidbody.linearVelocity =
+                Vector3.Lerp(GorillaTagger.Instance.rigidbody.linearVelocity, velocity, 0.12875f);
+        }
+        public static void BarkFly(params object[] args) => BarkFly();
         public static void Bees() { }
         public static void Bees(params object[] args) { }
         public static void Beyblade() { }
         public static void Beyblade(params object[] args) { }
-        public static void BirdFly() { }
-        public static void BirdFly(params object[] args) { }
+        private static float _birdFlapTime;
+        private static Vector3 _birdLastLeftPos;
+        private static Vector3 _birdLastRightPos;
+        public static void BirdFly()
+        {
+            if (GorillaTagger.Instance?.rigidbody == null || GorillaTagger.Instance.leftHandTransform == null || GorillaTagger.Instance.rightHandTransform == null)
+                return;
+
+            Vector3 leftPos = GorillaTagger.Instance.leftHandTransform.position;
+            Vector3 rightPos = GorillaTagger.Instance.rightHandTransform.position;
+
+            if (_birdLastLeftPos == Vector3.zero)
+                _birdLastLeftPos = leftPos;
+            if (_birdLastRightPos == Vector3.zero)
+                _birdLastRightPos = rightPos;
+
+            float deltaTime = Mathf.Max(Time.deltaTime, 0.0001f);
+            float leftVelY = (leftPos.y - _birdLastLeftPos.y) / deltaTime;
+            float rightVelY = (rightPos.y - _birdLastRightPos.y) / deltaTime;
+
+            _birdLastLeftPos = leftPos;
+            _birdLastRightPos = rightPos;
+
+            if (Time.time - _birdFlapTime < 0.2f)
+                return;
+
+            if (leftVelY < -1.0f && rightVelY < -1.0f)
+            {
+                float boost = Mathf.Clamp(CurrentFlySpeed * 0.5f, 3f, 10f);
+                GorillaTagger.Instance.rigidbody.linearVelocity += Vector3.up * boost;
+                _birdFlapTime = Time.time;
+            }
+        }
+        public static void BirdFly(params object[] args) => BirdFly();
         public static void Blink() { }
         public static void Blink(params object[] args) { }
         public static void Bomb() { }
@@ -1673,8 +1733,18 @@ namespace iiMenu.Mods
         public static void ShutdownHeadsetGun(params object[] args) { }
         public static void SizeChanger() { }
         public static void SizeChanger(params object[] args) { }
-        public static void SlingshotFly() { }
-        public static void SlingshotFly(params object[] args) { }
+        public static void SlingshotFly()
+        {
+            if (!iiMenu.Menu.Main.rightPrimary)
+                return;
+
+            if (GTPlayer.Instance?.headCollider == null || GorillaTagger.Instance?.rigidbody == null)
+                return;
+
+            GorillaTagger.Instance.rigidbody.linearVelocity +=
+                GTPlayer.Instance.headCollider.transform.forward * (Time.deltaTime * (CurrentFlySpeed * 2f));
+        }
+        public static void SlingshotFly(params object[] args) => SlingshotFly();
         public static void SlipSlap() { }
         public static void SlipSlap(params object[] args) { }
         public static void SolidPlayers() { }
@@ -1761,8 +1831,14 @@ namespace iiMenu.Mods
         public static void UpAndDown(params object[] args) { }
         public static void UpdateRig() { }
         public static void UpdateRig(params object[] args) { }
-        public static void VelocityBarkFly() { }
-        public static void VelocityBarkFly(params object[] args) { }
+        public static void VelocityBarkFly()
+        {
+            Vector2 leftJoy = iiMenu.Menu.Main.leftJoystick;
+            Vector2 rightJoy = iiMenu.Menu.Main.rightJoystick;
+            if (Mathf.Abs(leftJoy.x) > 0.3f || Mathf.Abs(leftJoy.y) > 0.3f || Mathf.Abs(rightJoy.x) > 0.3f || Mathf.Abs(rightJoy.y) > 0.3f)
+                BarkFly();
+        }
+        public static void VelocityBarkFly(params object[] args) => VelocityBarkFly();
         public static void VelocityLongArms() { }
         public static void VelocityLongArms(params object[] args) { }
         public static void VerticalLongArms() { }
@@ -1835,8 +1911,19 @@ namespace iiMenu.Mods
         public static void WaterRunHelper(params object[] args) { }
         public static void ZeroGravity() { }
         public static void ZeroGravity(params object[] args) { }
-        public static void ZeroGravitySlingshotFly() { }
-        public static void ZeroGravitySlingshotFly(params object[] args) { }
+        public static void ZeroGravitySlingshotFly()
+        {
+            if (!iiMenu.Menu.Main.rightPrimary)
+                return;
+
+            if (GTPlayer.Instance?.headCollider == null || GorillaTagger.Instance?.rigidbody == null)
+                return;
+
+            Rigidbody body = GorillaTagger.Instance.rigidbody;
+            body.linearVelocity += GTPlayer.Instance.headCollider.transform.forward * (Time.deltaTime * CurrentFlySpeed);
+            body.linearVelocity = new Vector3(body.linearVelocity.x, Mathf.Max(body.linearVelocity.y, -0.2f), body.linearVelocity.z);
+        }
+        public static void ZeroGravitySlingshotFly(params object[] args) => ZeroGravitySlingshotFly();
     }
 
     public static class Overpowered

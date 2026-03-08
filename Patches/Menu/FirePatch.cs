@@ -20,14 +20,13 @@
  */
 
 using HarmonyLib;
-using iiMenu.Extensions;
+using Seralyth.Extensions;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
-using static iiMenu.Utilities.GameModeUtilities;
+using static Seralyth.Utilities.GameModeUtilities;
 
-using iiMenu.Utilities;
-namespace iiMenu.Patches.Menu
+namespace Seralyth.Patches.Menu
 {
     [HarmonyPatch(typeof(SIGadgetChargeBlaster), nameof(SIGadgetChargeBlaster.FireProjectile))]
     public class FirePatch
@@ -39,7 +38,7 @@ namespace iiMenu.Patches.Menu
             if (enabled && __instance.blaster.LocalEquippedOrActivated)
             {
                 List<NetPlayer> infected = InfectedList();
-                List<VRRig> rigs = GorillaParent.instance.GetRigs()
+                List<VRRig> rigs = VRRigCache.ActiveRigs
                     .Where(rig => !rig.isLocal)
                     .Where(rig => !infected.Contains(rig.GetPlayer()))
                     .ToList();
@@ -61,5 +60,3 @@ namespace iiMenu.Patches.Menu
         }
     }
 }
-
-

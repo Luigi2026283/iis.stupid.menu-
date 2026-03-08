@@ -21,10 +21,15 @@
 
 using ExitGames.Client.Photon;
 using GorillaExtensions;
+using GorillaTagScripts;
 using HarmonyLib;
+using iiMenu.Managers;
 using Photon.Pun;
 using Photon.Realtime;
-﻿using System.Collections.Generic;
+using System;
+using System.Collections;
+using System.Collections.Generic;
+using System.Reflection;
 using UnityEngine;
 
 namespace iiMenu.Patches.Menu
@@ -149,6 +154,156 @@ namespace iiMenu.Patches.Menu
             }
         }
 
+        private static int builderSuppressedCount;
+        private static float builderNextSummaryTime;
+        private static bool builderPoolBlockLogged;
+        private static bool disableSimpleBackgroundWorkers;
+        private static bool workerBlockLogged;
 
+        private static Exception SuppressBuilderColliderNullReference(Exception exception, string source)
+        {
+            if (exception is NullReferenceException nullReferenceException)
+            {
+                string stackTrace = nullReferenceException.StackTrace ?? string.Empty;
+                if (stackTrace.IndexOf("BuilderPiece.SetCollidersEnabled", StringComparison.Ordinal) >= 0 ||
+                    source.IndexOf("BuilderPiece", StringComparison.Ordinal) >= 0 ||
+                    source.IndexOf("BuilderPool", StringComparison.Ordinal) >= 0)
+                {
+                    disableSimpleBackgroundWorkers = true;
+                    builderSuppressedCount++;
+                    if (Time.realtimeSinceStartup >= builderNextSummaryTime)
+                    {
+                        builderNextSummaryTime = Time.realtimeSinceStartup + 2f;
+                        LogManager.LogWarning($"Suppressed builder crash loop ({builderSuppressedCount} suppressed). Source: {source}");
+                    }
+
+                    return null;
+                }
+            }
+
+            return exception;
+        }
+
+        [PatchHandler.PatchOnAwake]
+        [HarmonyPatch(typeof(GorillaSimpleBackgroundWorkerManager), nameof(GorillaSimpleBackgroundWorkerManager.DoWork))]
+        internal static class SimpleBackgroundWorkerDoWorkPatch
+        {
+            private static bool Prefix()
+            {
+                if (!disableSimpleBackgroundWorkers)
+                    return true;
+
+                if (!workerBlockLogged)
+                {
+                    workerBlockLogged = true;
+                    LogManager.LogWarning("Blocked GorillaSimpleBackgroundWorkerManager.DoWork after builder crash detection.");
+                }
+
+                return false;
+            }
+
+            private static Exception Finalizer(Exception __exception) =>
+                SuppressBuilderColliderNullReference(__exception, "GorillaSimpleBackgroundWorkerManager.DoWork");
+        }
+
+        [PatchHandler.PatchOnAwake]
+        [HarmonyPatch(typeof(GorillaSimpleBackgroundWorkerManager), "_DoWork")]
+        internal static class SimpleBackgroundWorkerInternalPatch
+        {
+            private static bool Prefix()
+            {
+                if (!disableSimpleBackgroundWorkers)
+                    return true;
+
+                return false;
+            }
+
+            private static Exception Finalizer(Exception __exception) =>
+                SuppressBuilderColliderNullReference(__exception, "GorillaSimpleBackgroundWorkerManager._DoWork");
+        }
+
+        private static void TrySetEnabled(object component, bool enabled)
+        {
+            if (component == null)
+                return;
+
+            try
+            {
+                if (component is Behaviour behaviour)
+                {
+                    behaviour.enabled = enabled;
+                    return;
+                }
+
+                PropertyInfo enabledProperty = component.GetType().GetProperty("enabled", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                if (enabledProperty != null && enabledProperty.PropertyType == typeof(bool) && enabledProperty.CanWrite)
+                    enabledProperty.SetValue(component, enabled, null);
+            }
+            catch
+            {
+                // do nothing
+            }
+        }
+
+        [PatchHandler.PatchOnAwake]
+        [HarmonyPatch(typeof(BuilderPiece), "SetCollidersEnabled")]
+        internal static class BuilderPieceSetCollidersEnabledPatch
+        {
+            private static bool Prefix(object components, bool enabled)
+            {
+                if (components is not IList list)
+                    return true;
+
+                try
+                {
+                    for (int i = 0; i < list.Count; i++)
+                    {
+                        TrySetEnabled(list[i], enabled);
+                    }
+                }
+                catch
+                {
+                    // do nothing
+                }
+
+                // We safely handled this operation and avoid the crashing vanilla generic path.
+                return false;
+            }
+
+            private static Exception Finalizer(Exception __exception) =>
+                SuppressBuilderColliderNullReference(__exception, "BuilderPiece.SetCollidersEnabled");
+        }
+
+        [PatchHandler.PatchOnAwake]
+        [HarmonyPatch(typeof(BuilderPiece), nameof(BuilderPiece.Awake))]
+        internal static class BuilderPieceAwakePatch
+        {
+            private static Exception Finalizer(Exception __exception) =>
+                SuppressBuilderColliderNullReference(__exception, "BuilderPiece.Awake");
+        }
+
+        [PatchHandler.PatchOnAwake]
+        [HarmonyPatch(typeof(BuilderPool), nameof(BuilderPool.AddToPool))]
+        internal static class BuilderPoolAddToPoolPatch
+        {
+            private static Exception Finalizer(Exception __exception) =>
+                SuppressBuilderColliderNullReference(__exception, "BuilderPool.AddToPool");
+        }
+
+        [PatchHandler.PatchOnAwake]
+        [HarmonyPatch(typeof(BuilderPool), nameof(BuilderPool.SimpleWork))]
+        internal static class BuilderPoolSimpleWorkPatch
+        {
+            private static bool Prefix()
+            {
+                if (!builderPoolBlockLogged)
+                {
+                    builderPoolBlockLogged = true;
+                    LogManager.LogWarning("Blocked BuilderPool.SimpleWork to stop BuilderPiece null-reference crash loop.");
+                }
+
+                return false;
+            }
+        }
     }
 }

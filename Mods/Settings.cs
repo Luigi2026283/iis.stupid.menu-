@@ -4170,10 +4170,19 @@ exit 0";
             string filePath = $"{PluginInfo.BaseDirectory}/CustomFont.ttf";
             if (!File.Exists(filePath))
             {
+                if (!PluginInfo.RemoteNetworkingEnabled)
+                {
+                    NotificationManager.SendNotification("<color=grey>[</color><color=red>ERROR</color><color=grey>]</color> Remote networking is disabled. Put CustomFont.ttf in the menu folder.");
+                    return;
+                }
+
                 LogManager.Log("Downloading CustomFont.ttf");
-                WebClient stream = new WebClient();
+                using WebClient stream = new WebClient();
                 stream.DownloadFile($"{PluginInfo.ServerResourcePath}/Fonts/LiberationSans.ttf", filePath);
             }
+
+            if (!File.Exists(filePath))
+                return;
 
             chosenFont = TMP_FontAsset.CreateFontAsset(new Font($"{FileUtilities.GetGamePath()}/{filePath}"));
             PersistCustomFont();
@@ -5849,6 +5858,21 @@ exit 0";
         public static string SavePreferencesToText()
         {
             string seperator = ";;";
+            static string SafePreferenceValue(object value, string fallback = "0")
+            {
+                try
+                {
+                    if (value == null)
+                        return fallback;
+
+                    string text = value.ToString();
+                    return string.IsNullOrWhiteSpace(text) ? fallback : text;
+                }
+                catch
+                {
+                    return fallback;
+                }
+            }
 
             string enabledtext = "";
             foreach (ButtonInfo[] buttonlist in Buttons.buttons)
@@ -5874,77 +5898,81 @@ exit 0";
                     favoritetext += seperator + fav;
             }
 
-            string[] settings = {
-                Movement.platformMode.ToString(),
-                Movement.platformShape.ToString(),
-                Movement.flySpeedCycle.ToString(),
-                Movement.longarmCycle.ToString(),
-                Movement.speedboostCycle.ToString(),
-                Projectiles.projMode.ToString(),
-                Movement.timerPowerIndex.ToString(),
-                Projectiles.shootCycle.ToString(),
-                pointerIndex.ToString(),
-                Advantages.tagAuraIndex.ToString(),
-                notificationDecayTime.ToString(),
-                fontStyleType.ToString(),
-                arrowType.ToString(),
-                pcbg.ToString(),
-                Important.reconnectDelay.ToString(),
-                Safety.fpsSpoofValue.ToString(),
-                buttonClickIndex.ToString(),
-                buttonClickVolume.ToString(),
-                Safety.antiReportRangeIndex.ToString(),
-                Advantages.tagRangeIndex.ToString(),
-                Sound.BindMode.ToString(),
-                Movement.driveInt.ToString(),
-                langInd.ToString(),
-                inputTextColorInt.ToString(),
-                Movement.pullPowerInt.ToString(),
-                notificationSoundIndex.ToString(),
-                Visuals.PerformanceModeStepIndex.ToString(),
-                gunVariation.ToString(),
-                GunDirection.ToString(),
-                narratorIndex.ToString(),
-                Movement.predInt.ToString(),
-                gunLineQualityIndex.ToString(),
-                Projectiles.projDebounceIndex.ToString(),
-                Projectiles.red.ToString(),
-                Projectiles.green.ToString(),
-                Projectiles.blue.ToString(),
-                Safety.rankIndex.ToString(),
-                Overpowered.snowballScale.ToString(),
-                Overpowered.lagIndex.ToString(),
-                Fun.blockDebounceIndex.ToString(),
-                Fun.nameCycleIndex.ToString(),
-                menuScaleIndex.ToString(),
-                Sound.soundId.ToString(),
-                Fun.targetQuestScore.ToString(),
-                notificationScaleIndex.ToString(),
-                overlayScaleIndex.ToString(),
-                arraylistScaleIndex.ToString(),
-                ((int)MathF.Ceiling(playTime)).ToString(),
+            object[] settingsRaw = {
+                Movement.platformMode,
+                Movement.platformShape,
+                Movement.flySpeedCycle,
+                Movement.longarmCycle,
+                Movement.speedboostCycle,
+                Projectiles.projMode,
+                Movement.timerPowerIndex,
+                Projectiles.shootCycle,
+                pointerIndex,
+                Advantages.tagAuraIndex,
+                notificationDecayTime,
+                fontStyleType,
+                arrowType,
+                pcbg,
+                Important.reconnectDelay,
+                Safety.fpsSpoofValue,
+                buttonClickIndex,
+                buttonClickVolume,
+                Safety.antiReportRangeIndex,
+                Advantages.tagRangeIndex,
+                Sound.BindMode,
+                Movement.driveInt,
+                langInd,
+                inputTextColorInt,
+                Movement.pullPowerInt,
+                notificationSoundIndex,
+                Visuals.PerformanceModeStepIndex,
+                gunVariation,
+                GunDirection,
+                narratorIndex,
+                Movement.predInt,
+                gunLineQualityIndex,
+                Projectiles.projDebounceIndex,
+                Projectiles.red,
+                Projectiles.green,
+                Projectiles.blue,
+                Safety.rankIndex,
+                Overpowered.snowballScale,
+                Overpowered.lagIndex,
+                Fun.blockDebounceIndex,
+                Fun.nameCycleIndex,
+                menuScaleIndex,
+                Sound.soundId,
+                Fun.targetQuestScore,
+                notificationScaleIndex,
+                overlayScaleIndex,
+                arraylistScaleIndex,
+                (int)MathF.Ceiling(playTime),
                 PhotonNetwork.LocalPlayer?.UserId ?? "null",
-                _pageSize.ToString(),
-                Overpowered.snowballMultiplicationFactor.ToString(),
-                menuButtonIndex.ToString(),
-                Safety.targetElo.ToString(),
-                Safety.targetBadge.ToString(),
-                Movement.playspaceAbuseIndex.ToString(),
-                Movement.wallWalkStrengthIndex.ToString(),
-                Fun.headSpinIndex.ToString(),
-                Movement.macroPlaybackRangeIndex.ToString(),
-                joystickMenuPosition.ToString(),
-                Movement.multiplicationAmount.ToString(),
-                Fun.targetFOV.ToString(),
-                Projectiles.targetProjectileIndex.ToString(),
-                Movement.fakeLagDelayIndex.ToString(),
-                Projectiles.snowballIndex.ToString(),
-                characterDistance.ToString(),
-                Overpowered.lagTypeIndex.ToString(),
-                Overpowered.masterVisualizationType.ToString(),
-                Movement.targetHz.ToString(),
-                Safety.pingSpoofValue.ToString()
+                _pageSize,
+                Overpowered.snowballMultiplicationFactor,
+                menuButtonIndex,
+                Safety.targetElo,
+                Safety.targetBadge,
+                Movement.playspaceAbuseIndex,
+                Movement.wallWalkStrengthIndex,
+                Fun.headSpinIndex,
+                Movement.macroPlaybackRangeIndex,
+                joystickMenuPosition,
+                Movement.multiplicationAmount,
+                Fun.targetFOV,
+                Projectiles.targetProjectileIndex,
+                Movement.fakeLagDelayIndex,
+                Projectiles.snowballIndex,
+                characterDistance,
+                Overpowered.lagTypeIndex,
+                Overpowered.masterVisualizationType,
+                Movement.targetHz,
+                Safety.pingSpoofValue
             };
+
+            string[] settings = settingsRaw
+                .Select((value, index) => SafePreferenceValue(value, index == 48 ? "null" : "0"))
+                .ToArray();
 
             string settingstext = string.Join(seperator, settings);
 
@@ -5995,8 +6023,30 @@ exit 0";
             return finaltext;
         }
 
-        public static void SavePreferences() =>
-            File.WriteAllText($"{PluginInfo.BaseDirectory}/iiMenu_Preferences.txt", SavePreferencesToText());
+        private static string GetMenuPreferencesPath() =>
+            $"{PluginInfo.BaseDirectory}/iiMenu_Preferences.txt";
+
+        private static string GetFixedPreferencesPath() =>
+            $"{PluginInfo.BaseDirectory}/Seralyth_Preferences.txt";
+
+        private static string GetMenuPcControlsPath() =>
+            $"{PluginInfo.BaseDirectory}/iiMenu_PCControls.txt";
+
+        private static string GetFixedPcControlsPath() =>
+            $"{PluginInfo.BaseDirectory}/Seralyth_PCControls.txt";
+
+        public static void SavePreferences()
+        {
+            string preferences = SavePreferencesToText();
+            File.WriteAllText(GetMenuPreferencesPath(), preferences);
+
+            try
+            {
+                // Keep fixed-layout file in sync so loading behaves like the fixed menu.
+                File.WriteAllText(GetFixedPreferencesPath(), preferences);
+            }
+            catch { }
+        }
 
         public static int loadingPreferencesFrame;
         public static void LoadPreferencesFromText(string text)
@@ -6296,13 +6346,19 @@ exit 0";
         {
             try
             {
-                if (!File.Exists($"{PluginInfo.BaseDirectory}/iiMenu_Preferences.txt"))
+                string fixedPath = GetFixedPreferencesPath();
+                string menuPath = GetMenuPreferencesPath();
+
+                string pathToLoad = File.Exists(fixedPath) ? fixedPath :
+                    (File.Exists(menuPath) ? menuPath : null);
+
+                if (pathToLoad == null)
                 {
                     hasLoadedPreferences = true;
                     return;
                 }
 
-                string text = File.ReadAllText($"{PluginInfo.BaseDirectory}/iiMenu_Preferences.txt");
+                string text = File.ReadAllText(pathToLoad);
                 LoadPreferencesFromText(text);
             } catch (Exception e) { LogManager.Log("Error loading preferences: " + e.Message); }
         }
@@ -6351,7 +6407,9 @@ exit 0";
 
         public static void LoadPCControls()
         {
-            string fileName = $"{PluginInfo.BaseDirectory}/iiMenu_PCControls.txt";
+            string fixedPath = GetFixedPcControlsPath();
+            string menuPath = GetMenuPcControlsPath();
+            string fileName = File.Exists(fixedPath) ? fixedPath : menuPath;
 
             if (File.Exists(fileName))
             {
@@ -6379,7 +6437,12 @@ exit 0";
                 foreach (var pair in pcBindings)
                     lines.Add($"{pair.Value} - {pair.Key}");
 
-                File.WriteAllLines(fileName, lines);
+                File.WriteAllLines(menuPath, lines);
+                try
+                {
+                    File.WriteAllLines(fixedPath, lines);
+                }
+                catch { }
             }
         }
 

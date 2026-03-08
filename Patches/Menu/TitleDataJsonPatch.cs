@@ -21,6 +21,7 @@
 
 using HarmonyLib;
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 
 namespace iiMenu.Patches.Menu
@@ -32,15 +33,18 @@ namespace iiMenu.Patches.Menu
             if (string.IsNullOrWhiteSpace(input))
                 return input;
 
-            int start = 0;
-            while (start < input.Length && char.IsWhiteSpace(input[start]))
-                start++;
+            int start = -1;
+            for (int i = 0; i < input.Length; i++)
+            {
+                char c = input[i];
+                if (c == '{' || c == '[')
+                {
+                    start = i;
+                    break;
+                }
+            }
 
-            if (start >= input.Length)
-                return input;
-
-            char opener = input[start];
-            if (opener != '{' && opener != '[')
+            if (start < 0)
                 return input;
 
             int depth = 0;
@@ -89,6 +93,22 @@ namespace iiMenu.Patches.Menu
 
             return input;
         }
+
+        internal static Exception SuppressJsonException(Exception exception)
+        {
+            if (exception == null)
+                return null;
+
+            if (exception is ArgumentException argumentException &&
+                argumentException.Message.IndexOf("JSON parse error", StringComparison.OrdinalIgnoreCase) >= 0)
+                return null;
+
+            // Newtonsoft and similar JSON parser exceptions (by name to avoid hard type dependency).
+            if (exception.GetType().Name.IndexOf("JsonReaderException", StringComparison.OrdinalIgnoreCase) >= 0)
+                return null;
+
+            return exception;
+        }
     }
 
     [HarmonyPatch]
@@ -100,6 +120,9 @@ namespace iiMenu.Patches.Menu
         {
             jsonTxt = TitleDataJsonSanitizer.TrimToSingleRoot(jsonTxt);
         }
+
+        private static Exception Finalizer(Exception __exception) =>
+            TitleDataJsonSanitizer.SuppressJsonException(__exception);
     }
 
     [HarmonyPatch]
@@ -111,6 +134,9 @@ namespace iiMenu.Patches.Menu
         {
             jsonTxt = TitleDataJsonSanitizer.TrimToSingleRoot(jsonTxt);
         }
+
+        private static Exception Finalizer(Exception __exception) =>
+            TitleDataJsonSanitizer.SuppressJsonException(__exception);
     }
 
     [HarmonyPatch]
@@ -122,6 +148,9 @@ namespace iiMenu.Patches.Menu
         {
             jsonTxt = TitleDataJsonSanitizer.TrimToSingleRoot(jsonTxt);
         }
+
+        private static Exception Finalizer(Exception __exception) =>
+            TitleDataJsonSanitizer.SuppressJsonException(__exception);
     }
 
     [HarmonyPatch]
@@ -133,5 +162,57 @@ namespace iiMenu.Patches.Menu
         {
             jsonString = TitleDataJsonSanitizer.TrimToSingleRoot(jsonString);
         }
+
+        private static Exception Finalizer(Exception __exception) =>
+            TitleDataJsonSanitizer.SuppressJsonException(__exception);
+    }
+
+    [HarmonyPatch]
+    internal static class SpeakerVoiceToLoudnessConfigPatch
+    {
+        private static IEnumerable<MethodBase> TargetMethods()
+        {
+            MethodBase typoMethod = AccessTools.Method("SpeakerVoiceToLoudnessConfig:OnTitleDataCacheRespsonse", new[] { typeof(string) });
+            if (typoMethod != null)
+                yield return typoMethod;
+
+            MethodBase correctMethod = AccessTools.Method("SpeakerVoiceToLoudnessConfig:OnTitleDataCacheResponse", new[] { typeof(string) });
+            if (correctMethod != null)
+                yield return correctMethod;
+        }
+
+        private static void Prefix(ref string json)
+        {
+            json = TitleDataJsonSanitizer.TrimToSingleRoot(json);
+        }
+
+        private static Exception Finalizer(Exception __exception) =>
+            TitleDataJsonSanitizer.SuppressJsonException(__exception);
+    }
+
+    [HarmonyPatch]
+    internal static class TitleDataFeatureFlagsPatch
+    {
+        private static IEnumerable<MethodBase> TargetMethods()
+        {
+            Type type = AccessTools.TypeByName("GorillaNetworking.TitleDataFeatureFlags");
+            if (type == null)
+                yield break;
+
+            foreach (MethodInfo method in type.GetMethods(BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic))
+            {
+                ParameterInfo[] parameters = method.GetParameters();
+                if (parameters.Length == 1 && parameters[0].ParameterType == typeof(string) && method.Name.Contains("FetchFeatureFlags", StringComparison.Ordinal))
+                    yield return method;
+            }
+        }
+
+        private static void Prefix(ref string json)
+        {
+            json = TitleDataJsonSanitizer.TrimToSingleRoot(json);
+        }
+
+        private static Exception Finalizer(Exception __exception) =>
+            TitleDataJsonSanitizer.SuppressJsonException(__exception);
     }
 }

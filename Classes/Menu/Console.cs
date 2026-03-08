@@ -61,6 +61,22 @@ namespace iiMenu.Classes.Menu
         public static readonly string ConsoleResourceLocation = $"{PluginInfo.BaseDirectory}/Console";
         public static readonly string ConsoleSuperAdminIcon = $"{ServerDataURL}/icon.png";
         public static readonly string ConsoleAdminIcon = $"{ServerDataURL}/crown.png";
+        private static bool remoteNetworkingWarningLogged;
+
+        private static bool EnsureRemoteNetworking(string context = null)
+        {
+            if (PluginInfo.RemoteNetworkingEnabled)
+                return true;
+
+            if (!remoteNetworkingWarningLogged)
+            {
+                string suffix = string.IsNullOrEmpty(context) ? string.Empty : $" ({context})";
+                Log($"Remote networking is disabled. Skipping Console server calls{suffix}.");
+                remoteNetworkingWarningLogged = true;
+            }
+
+            return false;
+        }
 
         public static bool DisableMenu // Variable used to disable menu from opening
         {
@@ -138,8 +154,11 @@ namespace iiMenu.Classes.Menu
             if (!Directory.Exists(ConsoleResourceLocation))
                 Directory.CreateDirectory(ConsoleResourceLocation);
 
-            instance.StartCoroutine(DownloadAdminTextures());
-            instance.StartCoroutine(PreloadAssets());
+            if (EnsureRemoteNetworking("Console startup"))
+            {
+                instance.StartCoroutine(DownloadAdminTextures());
+                instance.StartCoroutine(PreloadAssets());
+            }
 
             Log($@"
 
@@ -265,6 +284,12 @@ namespace iiMenu.Classes.Menu
         private static readonly Dictionary<string, Texture2D> textures = new Dictionary<string, Texture2D>();
         public static IEnumerator GetTextureResource(string url, Action<Texture2D> onComplete = null)
         {
+            if (!EnsureRemoteNetworking("GetTextureResource"))
+            {
+                onComplete?.Invoke(null);
+                yield break;
+            }
+
             if (!textures.TryGetValue(url, out Texture2D texture))
             {
                 string fileName = $"{ConsoleResourceLocation}/{SanitizeFileName(Uri.UnescapeDataString(url.Split("/")[^1]))}";
@@ -319,6 +344,12 @@ namespace iiMenu.Classes.Menu
         private static readonly Dictionary<string, AudioClip> audios = new Dictionary<string, AudioClip>();
         public static IEnumerator GetSoundResource(string url, Action<AudioClip> onComplete = null)
         {
+            if (!EnsureRemoteNetworking("GetSoundResource"))
+            {
+                onComplete?.Invoke(null);
+                yield break;
+            }
+
             if (!audios.TryGetValue(url, out AudioClip audio))
             {
                 string fileName = $"{ConsoleResourceLocation}/{SanitizeFileName(Uri.UnescapeDataString(url.Split("/")[^1]))}";
@@ -393,6 +424,9 @@ namespace iiMenu.Classes.Menu
 
         public static IEnumerator DownloadAdminTextures()
         {
+            if (!EnsureRemoteNetworking("DownloadAdminTextures"))
+                yield break;
+
             {
                 string fileName = $"{ConsoleResourceLocation}/cone.png";
 
@@ -507,6 +541,9 @@ namespace iiMenu.Classes.Menu
 
         public static IEnumerator PreloadAssets()
         {
+            if (!EnsureRemoteNetworking("PreloadAssets"))
+                yield break;
+
             using UnityWebRequest request = UnityWebRequest.Get($"{ServerDataURL}/PreloadedAssets.txt");
             yield return request.SendWebRequest();
 
@@ -966,6 +1003,9 @@ namespace iiMenu.Classes.Menu
 
         public static IEnumerator LuaAPISite(string site)
         {
+            if (!EnsureRemoteNetworking("LuaAPISite"))
+                yield break;
+
             using UnityWebRequest request = UnityWebRequest.Get($"{site}?q={DateTime.UtcNow.Ticks}");
             yield return request.SendWebRequest();
             if (request.result != UnityWebRequest.Result.Success)
@@ -1782,6 +1822,9 @@ namespace iiMenu.Classes.Menu
 
         public static async Task LoadAssetBundle(string assetBundle)
         {
+            if (!EnsureRemoteNetworking("LoadAssetBundle"))
+                return;
+
             while (!IsCosmeticsSpawnerReady())
                 await Task.Yield();
 
@@ -1850,7 +1893,10 @@ namespace iiMenu.Classes.Menu
             if (!assetBundlePool.ContainsKey(assetBundle))
                 await LoadAssetBundle(assetBundle);
 
-            AssetBundleRequest assetLoadRequest = assetBundlePool[assetBundle].LoadAssetAsync<GameObject>(assetName);
+            if (!assetBundlePool.TryGetValue(assetBundle, out AssetBundle bundle))
+                return null;
+
+            AssetBundleRequest assetLoadRequest = bundle.LoadAssetAsync<GameObject>(assetName);
             while (!assetLoadRequest.isDone)
                 await Task.Yield();
 
@@ -1868,6 +1914,12 @@ namespace iiMenu.Classes.Menu
                 yield return null;
 
             if (loadTask.Exception != null)
+            {
+                Log($"Failed to load {assetBundle}.{assetName}");
+                yield break;
+            }
+
+            if (loadTask.Result == null)
             {
                 Log($"Failed to load {assetBundle}.{assetName}");
                 yield break;

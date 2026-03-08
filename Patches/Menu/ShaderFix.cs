@@ -19,7 +19,9 @@
  * along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
 
-﻿using HarmonyLib;
+using System;
+using System.Diagnostics;
+using HarmonyLib;
 using UnityEngine;
 using UnityEngine.Rendering;
 using static iiMenu.Menu.Main;
@@ -29,13 +31,48 @@ namespace iiMenu.Patches.Menu
     [HarmonyPatch(typeof(GameObject), nameof(GameObject.CreatePrimitive))]
     public class ShaderFix
     {
+        private static bool IsMenuPrimitiveCreation()
+        {
+            try
+            {
+                StackFrame[] frames = new StackTrace(2, false).GetFrames();
+                if (frames == null)
+                    return false;
+
+                foreach (StackFrame frame in frames)
+                {
+                    Type declaringType = frame.GetMethod()?.DeclaringType;
+                    if (declaringType == null)
+                        continue;
+
+                    string typeNamespace = declaringType.Namespace ?? string.Empty;
+                    if (typeNamespace.StartsWith("iiMenu", StringComparison.Ordinal))
+                        return true;
+
+                    string assemblyName = declaringType.Assembly.GetName().Name ?? string.Empty;
+                    if (assemblyName.Equals("iiMenu", StringComparison.OrdinalIgnoreCase))
+                        return true;
+                }
+            }
+            catch { }
+
+            return false;
+        }
+
         private static void Postfix(GameObject __result)
         {
+            if (__result == null || !IsMenuPrimitiveCreation())
+                return;
+
+            Renderer renderer = __result.GetComponent<Renderer>();
+            if (renderer == null)
+                return;
+
             if (crystallizeMenu && CrystalMaterial != null)
-                __result.GetComponent<Renderer>().material = CrystalMaterial;
+                renderer.material = CrystalMaterial;
             else if (transparentMenu)
             {
-                Material material = __result.GetComponent<Renderer>().material;
+                Material material = renderer.material;
                 material.shader = Shader.Find(shinyMenu ? "Universal Render Pipeline/Lit" : "Universal Render Pipeline/Unlit");
 
                 material.SetFloat("_Surface", 1);
@@ -45,10 +82,11 @@ namespace iiMenu.Patches.Menu
                 material.SetFloat("_ZWrite", 0);
                 material.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
                 material.renderQueue = (int)RenderQueue.Transparent;
-            } else
-                __result.GetComponent<Renderer>().material.shader = Shader.Find(shinyMenu ? "Universal Render Pipeline/Lit" : "GorillaTag/UberShader");
-            
-            __result.GetComponent<Renderer>().material.color = backgroundColor.GetColor(0);
+            }
+            else
+                renderer.material.shader = Shader.Find(shinyMenu ? "Universal Render Pipeline/Lit" : "GorillaTag/UberShader");
+
+            renderer.material.color = backgroundColor.GetColor(0);
         }
     }
 }
